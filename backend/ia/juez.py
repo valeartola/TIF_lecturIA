@@ -13,8 +13,8 @@ import time
 from openai import OpenAI, RateLimitError, APIConnectionError
 from dotenv import load_dotenv
 
-from backend.contexto import construir_prompt_juez
-from backend.especificaciones_loader import specs_para_juez
+from backend.ia.contexto import construir_prompt_juez
+from backend.ia.especificaciones_loader import specs_para_juez
 
 load_dotenv()
 

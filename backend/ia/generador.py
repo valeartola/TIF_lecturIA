@@ -6,9 +6,9 @@ import re
 from groq import Groq, RateLimitError, APIConnectionError
 from dotenv import load_dotenv
 
-from backend.contexto import construir_prompt_generador
-from backend.especificaciones_loader import specs_para_generador
-from backend.juez import evaluar
+from backend.ia.contexto import construir_prompt_generador
+from backend.ia.especificaciones_loader import specs_para_generador
+from backend.ia.juez import evaluar
 
 load_dotenv()
 _client = Groq(api_key=os.getenv("GROQ_API_KEY"))

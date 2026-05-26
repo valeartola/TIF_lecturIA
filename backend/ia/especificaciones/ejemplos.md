@@ -31,10 +31,10 @@ Cuando se agreguen ejemplos, deben seguir esta estructura:
 > d) opción 4
 
 **Evaluación:**
-- D1 Anclaje: X/5
-- D2 Corrección: X/5
-- D3 Distractores: X/5
-- D4 Nivel: X/5
+- D1 Contenido del texto: X/5
+- D2 Respuesta correcta única: X/5
+- D3 Nivel adecuado: X/5
+- D4 No repetición: X/5
 - Aprobada: sí / no
 
 **Justificación:**
