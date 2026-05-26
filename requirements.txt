@@ -3,3 +3,6 @@ pymupdf
 fastapi
 uvicorn
 python-dotenv
+openai
+sqlmodel
+python-multipart
