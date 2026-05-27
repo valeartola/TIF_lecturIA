@@ -8,10 +8,12 @@ La lógica es la misma que en backend/ia/generador.py pero encapsulada en una cl
 import json
 import random
 import asyncio
+import logging
 from backend.services.llm_client import LLMClient
 from backend.ia.contexto import construir_prompt_generador
 from backend.ia.especificaciones_loader import specs_para_generador
 
+logger = logging.getLogger(__name__)
 
 class Generador:
 
@@ -21,7 +23,8 @@ class Generador:
     def __init__(self, cliente: LLMClient):
         self._cliente = cliente
         self._specs = specs_para_generador()
-
+    
+    
     def analizar_texto(self, texto: str) -> tuple[int, str]:
         palabras = len(texto.split())
         if palabras < 300:
@@ -90,7 +93,7 @@ class Generador:
             )
             estado = "✓ aprobada" if evaluacion["aprobada"] else "✗ rechazada"
             aspecto = evaluacion.get("aspecto_cubierto", "?")
-            print(f"     intento {intento}: {scores} → {estado}  [{aspecto}]")
+            logger.info(f"     intento {intento}: {scores} → {estado}  [{aspecto}]")
 
             if evaluacion["aprobada"]:
                 return pregunta, evaluacion, intento, rechazadas
@@ -113,9 +116,9 @@ class Generador:
         tipos_pregunta = self.definir_tipos_pregunta(cantidad)
         posiciones = self.generar_posiciones(cantidad)
 
-        print(f" Texto {tipo_texto}: {len(texto.split())} palabras")
-        print(f" Generando {cantidad} preguntas")
-        print(f" Tipos: {tipos_pregunta}")
+        logger.info(f" Texto {tipo_texto}: {len(texto.split())} palabras")
+        logger.info(f" Generando {cantidad} preguntas")
+        logger.info(f" Tipos: {tipos_pregunta}")
 
         preguntas_aprobadas = []
         aspectos_cubiertos = []
@@ -124,7 +127,7 @@ class Generador:
         reemplazos_usados = 0
 
         for i, (tipo, pos) in enumerate(zip(tipos_pregunta, posiciones)):
-            print(f"\n   Pregunta {i+1}/{cantidad} — tipo: {tipo}, pos: {pos}")
+            logger.info(f"\n   Pregunta {i+1}/{cantidad} — tipo: {tipo}, pos: {pos}")
 
             pregunta, evaluacion, intentos, rechazadas = self._generar_y_evaluar(
                 juez, texto, dificultad, tipo, pos,
@@ -136,7 +139,7 @@ class Generador:
             while pregunta is None and reemplazos_usados < self.MAX_REEMPLAZOS_TOTALES:
                 reemplazos_usados += 1
                 nueva_pos = random.choice([0, 1, 2, 3])
-                print(f"   ↻ reemplazo {reemplazos_usados}: nuevo intento con pos={nueva_pos}")
+                logger.info(f"   ↻ reemplazo {reemplazos_usados}: nuevo intento con pos={nueva_pos}")
                 descartes.append({
                     "indice": i, "tipo": tipo,
                     "ultima_evaluacion": evaluacion, "intentos": intentos,
@@ -149,7 +152,7 @@ class Generador:
                     rechazos_todos.append({"slot": i + 1, "tipo": tipo, **r})
 
             if pregunta is None:
-                print(f"   ⚠ No se logró una pregunta aprobada para el slot {i+1}")
+                logger.warning(f"   ⚠ No se logró una pregunta aprobada para el slot {i+1}")
                 descartes.append({
                     "indice": i, "tipo": tipo,
                     "ultima_evaluacion": evaluacion, "intentos": intentos,
@@ -165,10 +168,10 @@ class Generador:
             pregunta["evaluacion"] = {**evaluacion, "intentos": intentos}
             preguntas_aprobadas.append(pregunta)
 
-        print(f"\n {len(preguntas_aprobadas)}/{cantidad} preguntas aprobadas "
+        logger.info(f"\n {len(preguntas_aprobadas)}/{cantidad} preguntas aprobadas "
               f"({reemplazos_usados} reemplazos, {len(descartes)} descartes, "
               f"{len(rechazos_todos)} intentos rechazados)")
-        print(f" Aspectos cubiertos: {aspectos_cubiertos}")
+        logger.info(f" Aspectos cubiertos: {aspectos_cubiertos}")
 
         return {
             "preguntas": preguntas_aprobadas,

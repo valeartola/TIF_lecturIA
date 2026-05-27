@@ -1,10 +1,10 @@
 from fastapi import FastAPI
 from backend.database import crear_tablas
 from backend import models
-from backend.routers import textos
-from backend.routers import actividades
-from backend.routers import respuestas
+from backend.routers import textos, actividades, respuestas
+from backend.config.settings import get_settings, configurar_logging
 
+configurar_logging(get_settings().log_level)
 
 app = FastAPI(title="LecturIA API")
 

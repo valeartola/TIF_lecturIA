@@ -6,10 +6,12 @@ La lógica es la misma que en backend/ia/juez.py pero encapsulada en una clase.
 """
 
 import json
+import logging
 from backend.services.llm_client import LLMClient
 from backend.ia.contexto import construir_prompt_juez
 from backend.ia.especificaciones_loader import specs_para_juez
 
+logger = logging.getLogger(__name__)
 
 class Juez:
 
@@ -67,7 +69,7 @@ class Juez:
             evaluacion = json.loads(contenido)
             self._validar_evaluacion(evaluacion)
         except (json.JSONDecodeError, ValueError) as e:
-            print(f"   [juez] formato inválido ({e}), reintentando...")
+            logger.warning(f"   [juez] formato inválido ({e}), reintentando...")
             contenido = self._cliente.llamar(prompt)
             evaluacion = json.loads(contenido)
             self._validar_evaluacion(evaluacion)

@@ -1,3 +1,4 @@
+import logging
 from pydantic_settings import BaseSettings
 from functools import lru_cache
 
@@ -16,3 +17,9 @@ class Settings(BaseSettings):
 @lru_cache()
 def get_settings() -> Settings:
     return Settings()
+
+def configurar_logging(level: str = "INFO") -> None:
+    logging.basicConfig(
+        level=getattr(logging, level.upper(), logging.INFO),
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    )

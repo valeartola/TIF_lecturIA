@@ -5,7 +5,7 @@ LLMClient es la clase base abstracta. GroqClient y UMCloudClient son las
 implementaciones concretas. El Generador y el Juez reciben un LLMClient
 y no saben qué modelo usan por debajo.
 """
-
+import logging
 import json
 import re
 import time
@@ -33,6 +33,7 @@ class LLMClient(ABC):
         minutos = int(m.group(1)) if m.group(1) else 0
         return minutos * 60 + float(m.group(2))
 
+logger = logging.getLogger(__name__)
 
 class GroqClient(LLMClient):
     """Cliente para Groq (llama-3.3-70b). Usado por el Generador."""
@@ -56,12 +57,12 @@ class GroqClient(LLMClient):
                 espera = self._extraer_espera_segundos(str(e))
                 if espera is None or espera > self.MAX_ESPERA_S:
                     raise
-                print(f"   [groq] rate limit, esperando {espera:.0f}s (intento {intento + 1}/3)...")
+                logger.warning(f"   [groq] rate limit, esperando {espera:.0f}s (intento {intento + 1}/3)...")
                 time.sleep(espera + 1)
             except GroqConnectionError:
                 if intento == 2:
                     raise
-                print(f"   [groq] error de conexión, reintentando en {self.ESPERA_CONEXION_S}s...")
+                logger.warning(f"   [groq] error de conexión, reintentando en {self.ESPERA_CONEXION_S}s...")
                 time.sleep(self.ESPERA_CONEXION_S)
         raise RuntimeError("GroqClient: no se pudo conectar tras varios reintentos")
 
@@ -93,11 +94,11 @@ class UMCloudClient(LLMClient):
                 espera = self._extraer_espera_segundos(str(e))
                 if espera is None or espera > self.MAX_ESPERA_S:
                     raise
-                print(f"   [um-cloud] rate limit, esperando {espera:.0f}s (intento {intento + 1}/3)...")
+                logger.warning(f"   [um-cloud] rate limit, esperando {espera:.0f}s (intento {intento + 1}/3)...")
                 time.sleep(espera + 1)
             except OpenAIConnectionError:
                 if intento == 2:
                     raise
-                print(f"   [um-cloud] error de conexión, reintentando en {self.ESPERA_CONEXION_S}s...")
+                logger.warning(f"   [um-cloud] error de conexión, reintentando en {self.ESPERA_CONEXION_S}s...")
                 time.sleep(self.ESPERA_CONEXION_S)
         raise RuntimeError("UMCloudClient: no se pudo conectar tras varios reintentos")
