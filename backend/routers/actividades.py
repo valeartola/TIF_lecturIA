@@ -1,12 +1,23 @@
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
-from sqlmodel import Session, select
+from fastapi import APIRouter, Depends, HTTPException
+from sqlmodel import Session
 import json
+import os
 
 from backend.database import get_session
 from backend.models import Texto, Actividad
-from backend.ia.generador import generar_actividad
+from backend.services.generador import Generador
+from backend.services.juez import Juez
+from backend.services.llm_client import GroqClient, UMCloudClient
+from backend.config.settings import get_settings
 
 router = APIRouter(prefix="/actividades", tags=["Actividades"])
+
+
+def _crear_generador_y_juez():
+    settings = get_settings()
+    groq_client = GroqClient(api_key=settings.groq_api_key)
+    um_client = UMCloudClient(api_key=settings.um_cloud_api_key)
+    return Generador(cliente=groq_client), Juez(cliente=um_client)
 
 
 @router.post("/generar")
@@ -15,22 +26,19 @@ def generar(
     dificultad: str = "MEDIA",
     session: Session = Depends(get_session)
 ):
-    # Verificar que el texto existe
     texto = session.get(Texto, texto_id)
     if not texto:
         raise HTTPException(status_code=404, detail="Texto no encontrado")
 
-    # Validar dificultad
-    # Mapeo para aceptar con y sin tilde
     mapeo = {"FACIL": "FÁCIL", "MEDIA": "MEDIA", "DIFICIL": "DIFÍCIL"}
     if dificultad in mapeo:
         dificultad = mapeo[dificultad]
     if dificultad not in ["FÁCIL", "MEDIA", "DIFÍCIL"]:
         raise HTTPException(status_code=400, detail="Dificultad debe ser FACIL, MEDIA o DIFICIL")
-    # Generar actividad con IA
-    resultado = generar_actividad(texto.contenido, dificultad=dificultad)
 
-    # Guardar en base de datos
+    generador, juez = _crear_generador_y_juez()
+    resultado = generador.generar_actividad(juez, texto.contenido, dificultad=dificultad)
+
     actividad = Actividad(
         texto_id=texto_id,
         dificultad=dificultad,

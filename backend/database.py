@@ -5,7 +5,6 @@ from dotenv import load_dotenv
 load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./lecturia.db")
-
 engine = create_engine(DATABASE_URL, echo=False)
 
 def crear_tablas():
