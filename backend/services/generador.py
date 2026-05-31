@@ -12,6 +12,8 @@ import logging
 from backend.services.llm_client import LLMClient
 from backend.ia.contexto import construir_prompt_generador
 from backend.ia.especificaciones_loader import specs_para_generador
+from backend.domain.actividad import PREGUNTAS_POR_NIVEL, DIFICULTADES
+
 
 logger = logging.getLogger(__name__)
 
@@ -23,16 +25,6 @@ class Generador:
     def __init__(self, cliente: LLMClient):
         self._cliente = cliente
         self._specs = specs_para_generador()
-    
-    
-    def analizar_texto(self, texto: str) -> tuple[int, str]:
-        palabras = len(texto.split())
-        if palabras < 300:
-            return random.choice([4, 5]), "corto"
-        elif palabras < 600:
-            return random.choice([5, 6]), "mediano"
-        else:
-            return random.choice([6, 7]), "largo"
 
     def definir_tipos_pregunta(self, cantidad: int) -> list[str]:
         tipos = [
@@ -57,7 +49,6 @@ class Generador:
         return posiciones[:cantidad]
 
     def _llamar_generador(self, prompt: str) -> dict:
-        """Llama al cliente y parsea el JSON. Un reintento si el formato falla."""
         contenido = self._cliente.llamar(prompt)
         try:
             return json.loads(contenido)
@@ -67,10 +58,6 @@ class Generador:
 
     def _generar_y_evaluar(self, juez, texto, dificultad, tipo, pos,
                            preguntas_anteriores, aspectos_previos=None):
-        """
-        Genera UNA pregunta y la evalúa con el juez.
-        Si el juez la rechaza, regenera con feedback hasta MAX_INTENTOS veces.
-        """
         feedback = None
         ultima_evaluacion = None
         rechazadas = []
@@ -85,79 +72,49 @@ class Generador:
                                       aspectos_previos=aspectos_previos)
             ultima_evaluacion = evaluacion
 
-            scores = (
-                f"D1={evaluacion['contenido_texto']} "
-                f"D2={evaluacion['respuesta_correcta_unica']} "
-                f"D3={evaluacion['nivel_adecuado']} "
-                f"D4={evaluacion['no_repeticion']}"
-            )
             estado = "✓ aprobada" if evaluacion["aprobada"] else "✗ rechazada"
-            aspecto = evaluacion.get("aspecto_cubierto", "?")
-            logger.info(f"     intento {intento}: {scores} → {estado}  [{aspecto}]")
+            logger.info(f"     intento {intento}: {estado}")
 
             if evaluacion["aprobada"]:
                 return pregunta, evaluacion, intento, rechazadas
 
-            rechazadas.append({
-                "intento": intento,
-                "pregunta": pregunta,
-                "evaluacion": evaluacion,
-            })
+            rechazadas.append({"intento": intento, "pregunta": pregunta, "evaluacion": evaluacion})
             feedback = evaluacion["sugerencia_mejora"] or evaluacion["comentarios"]
 
         return None, ultima_evaluacion, self.MAX_INTENTOS_POR_PREGUNTA, rechazadas
+    
+    def _generar_por_nivel(self, juez, texto: str, dificultad: str) -> dict:
+        """Genera PREGUNTAS_POR_NIVEL preguntas para una dificultad específica."""
+        tipos = self.definir_tipos_pregunta(PREGUNTAS_POR_NIVEL)
+        posiciones = self.generar_posiciones(PREGUNTAS_POR_NIVEL)
 
-    def generar_actividad(self, juez, texto: str, dificultad: str = "MEDIA") -> dict:
-        """
-        Genera una actividad completa. Cada pregunta pasa por generación
-        y evaluación del juez. Si no aprueba, se reemplaza hasta el tope.
-        """
-        cantidad, tipo_texto = self.analizar_texto(texto)
-        tipos_pregunta = self.definir_tipos_pregunta(cantidad)
-        posiciones = self.generar_posiciones(cantidad)
-
-        logger.info(f" Texto {tipo_texto}: {len(texto.split())} palabras")
-        logger.info(f" Generando {cantidad} preguntas")
-        logger.info(f" Tipos: {tipos_pregunta}")
+        logger.info(f"\n── Nivel {dificultad} ──")
 
         preguntas_aprobadas = []
         aspectos_cubiertos = []
         descartes = []
-        rechazos_todos = []
         reemplazos_usados = 0
 
-        for i, (tipo, pos) in enumerate(zip(tipos_pregunta, posiciones)):
-            logger.info(f"\n   Pregunta {i+1}/{cantidad} — tipo: {tipo}, pos: {pos}")
+        for i, (tipo, pos) in enumerate(zip(tipos, posiciones)):
+            logger.info(f"  Pregunta {i+1}/{PREGUNTAS_POR_NIVEL} — tipo: {tipo}")
 
             pregunta, evaluacion, intentos, rechazadas = self._generar_y_evaluar(
                 juez, texto, dificultad, tipo, pos,
                 preguntas_aprobadas, aspectos_previos=aspectos_cubiertos
             )
-            for r in rechazadas:
-                rechazos_todos.append({"slot": i + 1, "tipo": tipo, **r})
 
             while pregunta is None and reemplazos_usados < self.MAX_REEMPLAZOS_TOTALES:
                 reemplazos_usados += 1
                 nueva_pos = random.choice([0, 1, 2, 3])
-                logger.info(f"   ↻ reemplazo {reemplazos_usados}: nuevo intento con pos={nueva_pos}")
-                descartes.append({
-                    "indice": i, "tipo": tipo,
-                    "ultima_evaluacion": evaluacion, "intentos": intentos,
-                })
+                logger.info(f"  ↻ reemplazo {reemplazos_usados}")
+                descartes.append({"indice": i, "tipo": tipo, "ultima_evaluacion": evaluacion})
                 pregunta, evaluacion, intentos, rechazadas = self._generar_y_evaluar(
                     juez, texto, dificultad, tipo, nueva_pos,
                     preguntas_aprobadas, aspectos_previos=aspectos_cubiertos
                 )
-                for r in rechazadas:
-                    rechazos_todos.append({"slot": i + 1, "tipo": tipo, **r})
 
             if pregunta is None:
-                logger.warning(f"   ⚠ No se logró una pregunta aprobada para el slot {i+1}")
-                descartes.append({
-                    "indice": i, "tipo": tipo,
-                    "ultima_evaluacion": evaluacion, "intentos": intentos,
-                    "agotado": True,
-                })
+                logger.warning(f"  ⚠ Slot {i+1} sin pregunta aprobada")
                 continue
 
             aspecto = evaluacion.get("aspecto_cubierto", "").strip()
@@ -165,24 +122,37 @@ class Generador:
                 aspectos_cubiertos.append(aspecto)
 
             pregunta["tipo"] = tipo
-            pregunta["evaluacion"] = {**evaluacion, "intentos": intentos}
+            pregunta["dificultad"] = dificultad
             preguntas_aprobadas.append(pregunta)
 
-        logger.info(f"\n {len(preguntas_aprobadas)}/{cantidad} preguntas aprobadas "
-              f"({reemplazos_usados} reemplazos, {len(descartes)} descartes, "
-              f"{len(rechazos_todos)} intentos rechazados)")
-        logger.info(f" Aspectos cubiertos: {aspectos_cubiertos}")
-
         return {
+            "dificultad": dificultad,
             "preguntas": preguntas_aprobadas,
-            "descartes": descartes,
-            "rechazos": rechazos_todos,
-            "aspectos_cubiertos": aspectos_cubiertos,
             "metricas": {
-                "pedidas": cantidad,
+                "pedidas": PREGUNTAS_POR_NIVEL,
                 "aprobadas": len(preguntas_aprobadas),
                 "reemplazos": reemplazos_usados,
                 "descartes": len(descartes),
-                "rechazos_total": len(rechazos_todos),
-            },
+            }
+        }
+
+    def generar_actividad(self, juez, texto: str) -> dict:
+        """
+        Genera PREGUNTAS_POR_NIVEL preguntas para cada dificultad.
+        Retorna un dict con las preguntas agrupadas por nivel.
+        """
+        resultados = {}
+        metricas_totales = {"pedidas": 0, "aprobadas": 0, "reemplazos": 0, "descartes": 0}
+
+        for dificultad in DIFICULTADES:
+            resultado = self._generar_por_nivel(juez, texto, dificultad)
+            resultados[dificultad] = resultado["preguntas"]
+            for k in metricas_totales:
+                metricas_totales[k] += resultado["metricas"][k]
+
+        logger.info(f"\n✓ Generación completa: {metricas_totales}")
+
+        return {
+            "preguntas_por_nivel": resultados,  # {"FÁCIL": [...], "MEDIA": [...], "DIFÍCIL": [...]}
+            "metricas": metricas_totales,
         }

@@ -59,10 +59,12 @@ class Juez:
             dict con contenido_texto, respuesta_correcta_unica, nivel_adecuado,
             no_repeticion, aspecto_cubierto, aprobada, comentarios, sugerencia_mejora.
         """
-        prompt = construir_prompt_juez(
-            texto, pregunta, dificultad, tipo, self._specs, aspectos_previos
-        )
+        texto_truncado = texto[:3000] if len(texto) > 3000 else texto
 
+        prompt = construir_prompt_juez(
+            texto_truncado, pregunta, dificultad, tipo, self._specs, aspectos_previos
+        )
+    
         contenido = self._cliente.llamar(prompt)
 
         try:

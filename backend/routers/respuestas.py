@@ -1,9 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
-import json
 
 from backend.database import get_session
-from backend.models import Actividad, Respuesta
+from backend.models import Actividad, Pregunta, Respuesta
 
 router = APIRouter(prefix="/respuestas", tags=["Respuestas"])
 
@@ -11,31 +10,27 @@ router = APIRouter(prefix="/respuestas", tags=["Respuestas"])
 @router.post("/")
 def registrar_respuesta(
     alumno_id: int,
-    actividad_id: int,
-    pregunta_index: int,
+    pregunta_id: int,
     opcion_elegida: int,
     session: Session = Depends(get_session)
 ):
-    # Verificar que la actividad existe y está validada
-    actividad = session.get(Actividad, actividad_id)
-    if not actividad:
-        raise HTTPException(status_code=404, detail="Actividad no encontrada")
-    if not actividad.validada:
-        raise HTTPException(status_code=400, detail="La actividad aún no fue validada por el docente")
+    pregunta = session.get(Pregunta, pregunta_id)
+    if not pregunta:
+        raise HTTPException(status_code=404, detail="Pregunta no encontrada")
+    if not pregunta.validada:
+        raise HTTPException(status_code=400, detail="La pregunta no está disponible")
 
-    # Obtener la pregunta correcta
-    preguntas = json.loads(actividad.preguntas_json)
-    if pregunta_index >= len(preguntas):
-        raise HTTPException(status_code=400, detail="Índice de pregunta inválido")
+    # Verificar que la actividad padre está validada
+    actividad = session.get(Actividad, pregunta.actividad_id)
+    if not actividad or not actividad.validada:
+        raise HTTPException(status_code=403, detail="La actividad no está publicada")
 
-    correcta = preguntas[pregunta_index]["correcta"]
-    es_correcta = opcion_elegida == correcta
+    es_correcta = opcion_elegida == pregunta.opcion_correcta
 
-    # Guardar respuesta
     respuesta = Respuesta(
         alumno_id=alumno_id,
-        actividad_id=actividad_id,
-        pregunta_index=pregunta_index,
+        pregunta_id=pregunta_id,
+        actividad_id=pregunta.actividad_id,
         opcion_elegida=opcion_elegida,
         es_correcta=es_correcta
     )
@@ -45,5 +40,35 @@ def registrar_respuesta(
     return {
         "es_correcta": es_correcta,
         "opcion_elegida": opcion_elegida,
-        "opcion_correcta": correcta
+        "opcion_correcta": pregunta.opcion_correcta,
+        "dificultad": pregunta.dificultad
+    }
+
+@router.get("/alumno/{alumno_id}/historial")
+def historial_alumno(
+    alumno_id: int,
+    actividad_id: int | None = None,
+    session: Session = Depends(get_session)
+):
+    """Devuelve las respuestas del alumno, opcionalmente filtradas por actividad."""
+    from sqlmodel import select
+    query = select(Respuesta).where(Respuesta.alumno_id == alumno_id)
+    if actividad_id is not None:
+        query = query.where(Respuesta.actividad_id == actividad_id)
+
+    respuestas = session.exec(query).all()
+
+    return {
+        "alumno_id": alumno_id,
+        "total": len(respuestas),
+        "respuestas": [
+            {
+                "pregunta_id": r.pregunta_id,
+                "actividad_id": r.actividad_id,
+                "opcion_elegida": r.opcion_elegida,
+                "es_correcta": r.es_correcta,
+                "respondido_en": r.respondido_en,
+            }
+            for r in respuestas
+        ]
     }

@@ -12,8 +12,7 @@ import time
 from abc import ABC, abstractmethod
 
 from groq import Groq, RateLimitError as GroqRateLimitError, APIConnectionError as GroqConnectionError
-from openai import OpenAI, RateLimitError as OpenAIRateLimitError, APIConnectionError as OpenAIConnectionError
-
+from openai import OpenAI, RateLimitError as OpenAIRateLimitError, APIConnectionError as OpenAIConnectionError, InternalServerError as OpenAIInternalServerError
 
 class LLMClient(ABC):
     """Clase base abstracta para clientes de modelos de lenguaje."""
@@ -87,7 +86,7 @@ class UMCloudClient(LLMClient):
                     model=self.MODELO,
                     messages=[{"role": "user", "content": prompt}],
                     temperature=temperatura,
-                    response_format={"type": "json_object"},
+                    response_format={"type": "json_object"},  # agregar esta línea
                 )
                 return respuesta.choices[0].message.content
             except OpenAIRateLimitError as e:
@@ -100,5 +99,10 @@ class UMCloudClient(LLMClient):
                 if intento == 2:
                     raise
                 logger.warning(f"   [um-cloud] error de conexión, reintentando en {self.ESPERA_CONEXION_S}s...")
+                time.sleep(self.ESPERA_CONEXION_S)
+            except OpenAIInternalServerError as e:
+                if intento == 2:
+                    raise
+                logger.warning(f"   [um-cloud] servidor caído (502), reintentando en {self.ESPERA_CONEXION_S}s (intento {intento + 1}/3)...")
                 time.sleep(self.ESPERA_CONEXION_S)
         raise RuntimeError("UMCloudClient: no se pudo conectar tras varios reintentos")

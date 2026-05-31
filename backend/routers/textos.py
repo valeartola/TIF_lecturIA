@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
-from sqlmodel import Session
+from sqlmodel import Session, select
 import fitz
 
 from backend.database import get_session
-from backend.models import Texto
+from backend.models import Texto, Actividad
 
 router = APIRouter(prefix="/textos", tags=["Textos"])
 
@@ -40,6 +40,29 @@ def subir_texto(
 
 @router.get("/")
 def listar_textos(docente_id: int, session: Session = Depends(get_session)):
-    from sqlmodel import select
     textos = session.exec(select(Texto).where(Texto.docente_id == docente_id)).all()
     return textos
+
+@router.get("/{texto_id}")
+def obtener_texto(texto_id: int, session: Session = Depends(get_session)):
+    texto = session.get(Texto, texto_id)
+    if not texto:
+        raise HTTPException(status_code=404, detail="Texto no encontrado")
+
+
+    actividad_validada = session.exec(
+        select(Actividad).where(
+            Actividad.texto_id == texto_id,
+            Actividad.validada == True
+        )
+    ).first()
+
+    if not actividad_validada:
+        raise HTTPException(status_code=403, detail="Este texto no tiene una actividad publicada aún")
+
+    return {
+        "id": texto.id,
+        "titulo": texto.titulo,
+        "contenido": texto.contenido,
+        "palabras": len(texto.contenido.split())
+    }

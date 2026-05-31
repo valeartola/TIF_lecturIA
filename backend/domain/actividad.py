@@ -1,6 +1,9 @@
 from dataclasses import dataclass, field
 from .pregunta import Pregunta
 
+PREGUNTAS_POR_NIVEL = 7  # siempre se generan 5 por dificultad
+DIFICULTADES = ["FÁCIL", "MEDIA", "DIFÍCIL"]
+
 @dataclass
 class AnalisisTexto:
     palabras: int
@@ -11,11 +14,11 @@ class AnalisisTexto:
     def desde_texto(cls, texto: str) -> "AnalisisTexto":
         palabras = len(texto.split())
         if palabras < 300:
-            tipo, cantidad = "corto", 4
+            tipo, cantidad = "corto", 6
         elif palabras < 600:
-            tipo, cantidad = "mediano", 5
+            tipo, cantidad = "mediano", 8
         else:
-            tipo, cantidad = "largo", 6
+            tipo, cantidad = "largo", 10
         return cls(palabras=palabras, tipo=tipo, cantidad_preguntas=cantidad)
 
 @dataclass
