@@ -6,6 +6,7 @@ class Usuario(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     nombre: str
     email: str
+    password_hash: str
     rol: str  # "docente" o "alumno"
     creado_en: datetime = Field(default_factory=datetime.utcnow)
 

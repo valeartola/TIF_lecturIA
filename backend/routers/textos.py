@@ -3,7 +3,8 @@ from sqlmodel import Session, select
 import fitz
 
 from backend.database import get_session
-from backend.models import Texto, Actividad
+from backend.models import Texto, Actividad, Usuario
+from backend.auth import solo_docente, get_usuario_actual
 
 router = APIRouter(prefix="/textos", tags=["Textos"])
 
@@ -11,15 +12,13 @@ router = APIRouter(prefix="/textos", tags=["Textos"])
 @router.post("/subir")
 def subir_texto(
     titulo: str,
-    docente_id: int,
     archivo: UploadFile = File(...),
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    docente: Usuario = Depends(solo_docente)
 ):
-    # Verificar que sea PDF
     if not archivo.filename.endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Solo se aceptan archivos PDF")
 
-    # Extraer texto del PDF
     contenido_bytes = archivo.file.read()
     doc = fitz.open(stream=contenido_bytes, filetype="pdf")
     texto_extraido = ""
@@ -29,8 +28,7 @@ def subir_texto(
     if not texto_extraido.strip():
         raise HTTPException(status_code=400, detail="No se pudo extraer texto del PDF")
 
-    # Guardar en base de datos
-    texto = Texto(titulo=titulo, contenido=texto_extraido, docente_id=docente_id)
+    texto = Texto(titulo=titulo, contenido=texto_extraido, docente_id=docente.id)
     session.add(texto)
     session.commit()
     session.refresh(texto)
@@ -39,16 +37,22 @@ def subir_texto(
 
 
 @router.get("/")
-def listar_textos(docente_id: int, session: Session = Depends(get_session)):
-    textos = session.exec(select(Texto).where(Texto.docente_id == docente_id)).all()
+def listar_textos(
+    session: Session = Depends(get_session),
+    docente: Usuario = Depends(solo_docente)
+):
+    textos = session.exec(select(Texto).where(Texto.docente_id == docente.id)).all()
     return textos
 
 @router.get("/{texto_id}")
-def obtener_texto(texto_id: int, session: Session = Depends(get_session)):
+def obtener_texto(
+    texto_id: int,
+    session: Session = Depends(get_session),
+    usuario: Usuario = Depends(get_usuario_actual)
+):
     texto = session.get(Texto, texto_id)
     if not texto:
         raise HTTPException(status_code=404, detail="Texto no encontrado")
-
 
     actividad_validada = session.exec(
         select(Actividad).where(

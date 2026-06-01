@@ -2,7 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 
 from backend.database import get_session
-from backend.models import Actividad, Pregunta, Respuesta
+from backend.models import Actividad, Pregunta, Respuesta, Usuario
+from backend.auth import solo_alumno, get_usuario_actual
 
 router = APIRouter(prefix="/respuestas", tags=["Respuestas"])
 
@@ -12,7 +13,8 @@ def registrar_respuesta(
     alumno_id: int,
     pregunta_id: int,
     opcion_elegida: int,
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    alumno: Usuario = Depends(solo_alumno)
 ):
     pregunta = session.get(Pregunta, pregunta_id)
     if not pregunta:
@@ -20,7 +22,6 @@ def registrar_respuesta(
     if not pregunta.validada:
         raise HTTPException(status_code=400, detail="La pregunta no está disponible")
 
-    # Verificar que la actividad padre está validada
     actividad = session.get(Actividad, pregunta.actividad_id)
     if not actividad or not actividad.validada:
         raise HTTPException(status_code=403, detail="La actividad no está publicada")
@@ -44,14 +45,18 @@ def registrar_respuesta(
         "dificultad": pregunta.dificultad
     }
 
+
 @router.get("/alumno/{alumno_id}/historial")
 def historial_alumno(
     alumno_id: int,
     actividad_id: int | None = None,
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    usuario: Usuario = Depends(get_usuario_actual)
 ):
-    """Devuelve las respuestas del alumno, opcionalmente filtradas por actividad."""
-    from sqlmodel import select
+    # Docente puede ver cualquier historial, alumno solo el suyo
+    if usuario.rol == "alumno" and usuario.id != alumno_id:
+        raise HTTPException(status_code=403, detail="No podés ver el historial de otro alumno")
+
     query = select(Respuesta).where(Respuesta.alumno_id == alumno_id)
     if actividad_id is not None:
         query = query.where(Respuesta.actividad_id == actividad_id)

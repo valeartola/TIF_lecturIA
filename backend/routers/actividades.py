@@ -3,12 +3,12 @@ from sqlmodel import Session, select
 import json
 
 from backend.database import get_session
-from backend.models import Texto, Actividad, Pregunta
+from backend.models import Texto, Actividad, Pregunta, Usuario
 from backend.services.generador import Generador
 from backend.services.juez import Juez
 from backend.services.llm_client import GroqClient, UMCloudClient
 from backend.config.settings import get_settings
-
+from backend.auth import solo_docente, solo_alumno
 
 router = APIRouter(prefix="/actividades", tags=["Actividades"])
 
@@ -21,7 +21,11 @@ def _crear_generador_y_juez():
 
 
 @router.post("/generar")
-def generar(texto_id: int, session: Session = Depends(get_session)):
+def generar(
+    texto_id: int,
+    session: Session = Depends(get_session),
+    docente: Usuario = Depends(solo_docente)
+):
     texto = session.get(Texto, texto_id)
     if not texto:
         raise HTTPException(status_code=404, detail="Texto no encontrado")
@@ -29,13 +33,11 @@ def generar(texto_id: int, session: Session = Depends(get_session)):
     generador, juez = _crear_generador_y_juez()
     resultado = generador.generar_actividad(juez, texto.contenido)
 
-    # Crear la actividad contenedora
     actividad = Actividad(texto_id=texto_id, validada=False)
     session.add(actividad)
     session.commit()
     session.refresh(actividad)
 
-    # Guardar cada pregunta como registro individual
     for dificultad, preguntas in resultado["preguntas_por_nivel"].items():
         for p in preguntas:
             pregunta = Pregunta(
@@ -56,8 +58,13 @@ def generar(texto_id: int, session: Session = Depends(get_session)):
         "metricas": resultado["metricas"]
     }
 
+
 @router.get("/{actividad_id}")
-def obtener_actividad(actividad_id: int, session: Session = Depends(get_session)):
+def obtener_actividad(
+    actividad_id: int,
+    session: Session = Depends(get_session),
+    docente: Usuario = Depends(solo_docente)
+):
     actividad = session.get(Actividad, actividad_id)
     if not actividad:
         raise HTTPException(status_code=404, detail="Actividad no encontrada")
@@ -66,7 +73,6 @@ def obtener_actividad(actividad_id: int, session: Session = Depends(get_session)
         select(Pregunta).where(Pregunta.actividad_id == actividad_id)
     ).all()
 
-    # Agrupar por nivel para el docente
     por_nivel = {"FÁCIL": [], "MEDIA": [], "DIFÍCIL": []}
     for p in preguntas:
         por_nivel[p.dificultad].append({
@@ -87,7 +93,11 @@ def obtener_actividad(actividad_id: int, session: Session = Depends(get_session)
 
 
 @router.patch("/{actividad_id}/validar")
-def validar_actividad(actividad_id: int, session: Session = Depends(get_session)):
+def validar_actividad(
+    actividad_id: int,
+    session: Session = Depends(get_session),
+    docente: Usuario = Depends(solo_docente)
+):
     actividad = session.get(Actividad, actividad_id)
     if not actividad:
         raise HTTPException(status_code=404, detail="Actividad no encontrada")
@@ -98,8 +108,13 @@ def validar_actividad(actividad_id: int, session: Session = Depends(get_session)
 
     return {"mensaje": "Actividad validada correctamente", "id": actividad_id}
 
+
 @router.patch("/preguntas/{pregunta_id}/validar")
-def validar_pregunta(pregunta_id: int, session: Session = Depends(get_session)):
+def validar_pregunta(
+    pregunta_id: int,
+    session: Session = Depends(get_session),
+    docente: Usuario = Depends(solo_docente)
+):
     pregunta = session.get(Pregunta, pregunta_id)
     if not pregunta:
         raise HTTPException(status_code=404, detail="Pregunta no encontrada")
@@ -110,13 +125,14 @@ def validar_pregunta(pregunta_id: int, session: Session = Depends(get_session)):
 
     return {"mensaje": "Pregunta validada correctamente", "id": pregunta_id}
 
+
 @router.get("/{actividad_id}/alumno/proxima")
 def proxima_pregunta(
     actividad_id: int,
     alumno_id: int,
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    alumno: Usuario = Depends(solo_alumno)
 ):
-    """Devuelve la próxima pregunta para el alumno según su nivel actual."""
     actividad = session.get(Actividad, actividad_id)
     if not actividad:
         raise HTTPException(status_code=404, detail="Actividad no encontrada")
