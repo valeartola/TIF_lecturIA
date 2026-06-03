@@ -59,7 +59,8 @@ def crear_alumno(
         nombre=datos.nombre,
         email=datos.email,
         password_hash=hashear_password(datos.password),
-        rol="alumno"
+        rol="alumno",
+        docente_id=docente.id  # ← se asigna automáticamente
     )
     session.add(alumno)
     session.commit()
@@ -71,5 +72,10 @@ def listar_alumnos(
     docente: Usuario = Depends(solo_docente),
     session: Session = Depends(get_session)
 ):
-    alumnos = session.exec(select(Usuario).where(Usuario.rol == "alumno")).all()
+    alumnos = session.exec(
+        select(Usuario).where(
+            Usuario.rol == "alumno",
+            Usuario.docente_id == docente.id  # ← solo los suyos
+        )
+    ).all()
     return [{"id": a.id, "nombre": a.nombre, "email": a.email} for a in alumnos]

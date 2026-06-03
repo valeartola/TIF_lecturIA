@@ -7,7 +7,8 @@ class Usuario(SQLModel, table=True):
     nombre: str
     email: str
     password_hash: str
-    rol: str  # "docente" o "alumno"
+    rol: str
+    docente_id: Optional[int] = Field(default=None, foreign_key="usuario.id")  # solo para alumnos
     creado_en: datetime = Field(default_factory=datetime.utcnow)
 
 class Texto(SQLModel, table=True):

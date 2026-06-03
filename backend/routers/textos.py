@@ -4,7 +4,7 @@ import fitz
 
 from backend.database import get_session
 from backend.models import Texto, Actividad, Usuario
-from backend.auth import solo_docente, get_usuario_actual
+from backend.auth import solo_docente, get_usuario_actual, solo_alumno
 
 router = APIRouter(prefix="/textos", tags=["Textos"])
 
@@ -44,6 +44,34 @@ def listar_textos(
     textos = session.exec(select(Texto).where(Texto.docente_id == docente.id)).all()
     return textos
 
+@router.get("/disponibles")
+def textos_disponibles(
+    session: Session = Depends(get_session),
+    alumno: Usuario = Depends(solo_alumno)
+):
+    textos = session.exec(
+        select(Texto).where(Texto.docente_id == alumno.docente_id)
+    ).all()
+
+    resultado = []
+    for texto in textos:
+        actividad_validada = session.exec(
+            select(Actividad).where(
+                Actividad.texto_id == texto.id,
+                Actividad.validada == True
+            )
+        ).first()
+        if actividad_validada:
+            resultado.append({
+                "id": texto.id,
+                "titulo": texto.titulo,
+                "palabras": len(texto.contenido.split()),
+                "actividad_id": actividad_validada.id
+            })
+
+    return resultado
+
+
 @router.get("/{texto_id}")
 def obtener_texto(
     texto_id: int,
@@ -53,6 +81,9 @@ def obtener_texto(
     texto = session.get(Texto, texto_id)
     if not texto:
         raise HTTPException(status_code=404, detail="Texto no encontrado")
+
+    if usuario.rol == "alumno" and texto.docente_id != usuario.docente_id:
+        raise HTTPException(status_code=403, detail="No tenés acceso a este texto")
 
     actividad_validada = session.exec(
         select(Actividad).where(

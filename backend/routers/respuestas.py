@@ -10,7 +10,6 @@ router = APIRouter(prefix="/respuestas", tags=["Respuestas"])
 
 @router.post("/")
 def registrar_respuesta(
-    alumno_id: int,
     pregunta_id: int,
     opcion_elegida: int,
     session: Session = Depends(get_session),
@@ -29,7 +28,7 @@ def registrar_respuesta(
     es_correcta = opcion_elegida == pregunta.opcion_correcta
 
     respuesta = Respuesta(
-        alumno_id=alumno_id,
+        alumno_id=alumno.id,  # viene del token
         pregunta_id=pregunta_id,
         actividad_id=pregunta.actividad_id,
         opcion_elegida=opcion_elegida,

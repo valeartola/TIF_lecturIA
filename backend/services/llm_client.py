@@ -13,6 +13,10 @@ from abc import ABC, abstractmethod
 
 from groq import Groq, RateLimitError as GroqRateLimitError, APIConnectionError as GroqConnectionError
 from openai import OpenAI, RateLimitError as OpenAIRateLimitError, APIConnectionError as OpenAIConnectionError, InternalServerError as OpenAIInternalServerError
+from google import genai
+from google.genai import types
+
+
 
 class LLMClient(ABC):
     """Clase base abstracta para clientes de modelos de lenguaje."""
@@ -106,3 +110,33 @@ class UMCloudClient(LLMClient):
                 logger.warning(f"   [um-cloud] servidor caído (502), reintentando en {self.ESPERA_CONEXION_S}s (intento {intento + 1}/3)...")
                 time.sleep(self.ESPERA_CONEXION_S)
         raise RuntimeError("UMCloudClient: no se pudo conectar tras varios reintentos")
+
+
+class GeminiClient(LLMClient):
+    """Cliente para Gemini (gemini-2.0-flash). Usado por el Juez."""
+
+    MODELO = "gemini-2.5-flash-lite"
+    PAUSA_ENTRE_LLAMADAS_S = 1.0
+
+    def __init__(self, api_key: str):
+        self._client = genai.Client(api_key=api_key)
+
+    def llamar(self, prompt: str, temperatura: float = 0.5) -> str:
+        time.sleep(self.PAUSA_ENTRE_LLAMADAS_S)
+        for intento in range(3):
+            try:
+                respuesta = self._client.models.generate_content(
+                    model=self.MODELO,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        temperature=temperatura,
+                        response_mime_type="application/json"
+                    )
+                )
+                return respuesta.text
+            except Exception as e:
+                if intento == 2:
+                    raise
+                logger.warning(f"   [gemini] error, reintentando en {self.ESPERA_CONEXION_S}s (intento {intento + 1}/3)...")
+                time.sleep(self.ESPERA_CONEXION_S)
+        raise RuntimeError("GeminiClient: no se pudo conectar tras varios reintentos")
