@@ -26,6 +26,7 @@ from backend.auth import hashear_password
 DOCENTE_EMAIL = "docente@seed.com"
 DOCENTE_PASSWORD = "docente123"
 ALUMNO_PASSWORD = "alumno123"
+CODIGO_CLASE = "TEST-2345"
 
 
 def limpiar_seed_previo(session: Session) -> None:
@@ -95,6 +96,7 @@ def sembrar(session: Session) -> None:
         email=DOCENTE_EMAIL,
         password_hash=hashear_password(DOCENTE_PASSWORD),
         rol="docente",
+        codigo_clase=CODIGO_CLASE,
     )
     session.add(docente)
     session.commit()
@@ -106,7 +108,6 @@ def sembrar(session: Session) -> None:
     for i, nombre in enumerate(nombres_alumnos, start=1):
         alumno = Usuario(
             nombre=nombre,
-            email=f"alumno{i}@seed.com",
             password_hash=hashear_password(ALUMNO_PASSWORD),
             rol="alumno",
             docente_id=docente.id,
@@ -190,14 +191,15 @@ def sembrar(session: Session) -> None:
     # --- Resumen por consola ---
     print("Seed completado.")
     print(f"  Docente: {DOCENTE_EMAIL} / {DOCENTE_PASSWORD}  (id={docente.id})")
+    print(f"  Código de clase: {CODIGO_CLASE}")
     print(f"  Alumnos: {', '.join(f'{a.nombre} (id={a.id})' for a in alumnos)}  / {ALUMNO_PASSWORD}")
     print(f"  Texto id={texto.id} | Actividad id={actividad.id} (publicada)")
     print(f"  Preguntas validadas: 4 por nivel (12 en total)")
     print(f"  Respuestas: Ana=4, Beto=3, Caro=0")
     print()
-    print("Probá en /docs:")
-    print(f"  GET /progreso/alumno/{ana.id}/actividad/{actividad.id}")
-    print(f"  GET /progreso/resumen/actividad/{actividad.id}")
+    print("Login en /docs (botón Authorize):")
+    print(f"  Docente -> username: {DOCENTE_EMAIL}      | password: {DOCENTE_PASSWORD}")
+    print(f"  Alumno  -> username: {CODIGO_CLASE}/Ana    | password: {ALUMNO_PASSWORD}")
 
 
 def main():

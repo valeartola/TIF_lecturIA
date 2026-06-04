@@ -1,27 +1,31 @@
 import logging
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
-from fastapi.security import HTTPBearer
+
 from backend.database import crear_tablas
 from backend import models
-from backend.routers import auth
-from backend.routers import textos, actividades, respuestas
+from backend.routers import auth, textos, actividades, respuestas, progreso
 from backend.config.settings import get_settings, configurar_logging
 
 configurar_logging(get_settings().log_level)
+logger = logging.getLogger("lecturia")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Tareas de arranque (reemplaza al on_event("startup") deprecado)
+    crear_tablas()
+    yield
+    # Acá irían tareas de cierre si hicieran falta
+
 
 app = FastAPI(
     title="LecturIA API",
-    swagger_ui_init_oauth={"usePkceWithAuthorizationCodeGrant": True}
+    lifespan=lifespan,
+    swagger_ui_init_oauth={"usePkceWithAuthorizationCodeGrant": True},
 )
-
-security = HTTPBearer()
-
-@app.on_event("startup")
-def on_startup():
-    crear_tablas()
-
-logger = logging.getLogger("lecturia")
 
 
 # Red de seguridad: atrapa cualquier error inesperado que ningún endpoint
@@ -40,7 +44,9 @@ async def manejar_error_inesperado(request: Request, exc: Exception):
 def raiz():
     return {"mensaje": "LecturIA API funcionando"}
 
+
+app.include_router(auth.router)
 app.include_router(textos.router)
 app.include_router(actividades.router)
 app.include_router(respuestas.router)
-app.include_router(auth.router)
+app.include_router(progreso.router)

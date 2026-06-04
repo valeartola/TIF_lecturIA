@@ -1,10 +1,7 @@
-import os
 from sqlmodel import SQLModel, create_engine, Session
-from dotenv import load_dotenv
+from backend.config.settings import get_settings
 
-load_dotenv()
-
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./lecturia.db")
+DATABASE_URL = get_settings().database_url
 engine = create_engine(DATABASE_URL, echo=False)
 
 def crear_tablas():

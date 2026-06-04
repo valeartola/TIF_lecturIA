@@ -5,9 +5,10 @@ from datetime import datetime
 class Usuario(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     nombre: str
-    email: str
+    email: Optional[str] = Field(default=None)          # solo para docentes
     password_hash: str
     rol: str
+    codigo_clase: Optional[str] = Field(default=None, unique=True)  # solo para docentes
     docente_id: Optional[int] = Field(default=None, foreign_key="usuario.id")  # solo para alumnos
     creado_en: datetime = Field(default_factory=datetime.utcnow)
 
