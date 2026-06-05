@@ -1,0 +1,134 @@
+/**
+ * api.js — Cliente centralizado de LecturIA
+ * Todas las llamadas al backend pasan por aquí.
+ */
+
+// ── Token / sesión ──────────────────────────────────────────
+export const getToken = () => localStorage.getItem('token');
+export const getUser = () => JSON.parse(localStorage.getItem('user') || 'null');
+
+export const setAuth = (token, user) => {
+    localStorage.setItem('token', token);
+    localStorage.setItem('user', JSON.stringify(user));
+};
+
+export const clearAuth = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+};
+
+// ── Fetch base con auth ──────────────────────────────────────
+async function apiFetch(path, options = {}) {
+    const token = getToken();
+    const headers = { ...(options.headers || {}) };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const res = await fetch(path, { ...options, headers });
+
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: res.statusText }));
+        const error = new Error(err.detail || 'Error desconocido');
+        error.status = res.status;
+        throw error;
+    }
+    return res.json();
+}
+
+// ── Auth ─────────────────────────────────────────────────────
+
+/** Login docente: email + password */
+export function loginDocente(email, password) {
+    const body = new URLSearchParams({ username: email, password });
+    return apiFetch('/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body,
+    });
+}
+
+/** Login alumno: código de clase + nombre + password */
+export function loginAlumno(codigoClase, nombre, password) {
+    const body = new URLSearchParams({
+        username: `${codigoClase.trim()}/${nombre.trim()}`,
+        password,
+    });
+    return apiFetch('/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body,
+    });
+}
+
+/** Devuelve el usuario logueado según el JWT */
+export const getMe = () => apiFetch('/auth/me');
+
+/** Lista de alumnos de la clase del docente */
+export const listarAlumnos = () => apiFetch('/auth/alumnos');
+
+/** Crea un alumno (docente) */
+export const crearAlumno = (nombre, password) =>
+    apiFetch('/auth/alumnos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nombre, password }),
+    });
+
+// ── Textos ───────────────────────────────────────────────────
+
+/** Textos del docente con estado de actividad */
+export const listarMisActividades = () => apiFetch('/textos/mis-actividades');
+
+/** Sube un PDF y crea el texto */
+export function subirTexto(titulo, archivo) {
+    const fd = new FormData();
+    fd.append('archivo', archivo);
+    return apiFetch(`/textos/subir?titulo=${encodeURIComponent(titulo)}`, {
+        method: 'POST',
+        body: fd,
+    });
+}
+
+/** Textos disponibles para el alumno (con actividad publicada) */
+export const listarTextosDisponibles = () => apiFetch('/textos/disponibles');
+
+/** Contenido completo de un texto */
+export const getTexto = (textoId) => apiFetch(`/textos/${textoId}`);
+
+// ── Actividades ──────────────────────────────────────────────
+
+/** Genera actividad + preguntas con IA a partir de un texto */
+export const generarActividad = (textoId) =>
+    apiFetch(`/actividades/generar?texto_id=${textoId}`, { method: 'POST' });
+
+/** Valida una pregunta individual (docente) */
+export const validarPregunta = (preguntaId) =>
+    apiFetch(`/actividades/preguntas/${preguntaId}/validar`, { method: 'PATCH' });
+
+/** Publica la actividad completa (docente) */
+export const publicarActividad = (actividadId) =>
+    apiFetch(`/actividades/${actividadId}/validar`, { method: 'PATCH' });
+
+/** Siguiente pregunta adaptativa para el alumno */
+export const proximaPregunta = (actividadId) =>
+    apiFetch(`/actividades/${actividadId}/alumno/proxima`);
+
+// ── Respuestas ───────────────────────────────────────────────
+
+/** Registra la respuesta del alumno a una pregunta */
+export const registrarRespuesta = (preguntaId, opcionElegida) =>
+    apiFetch(`/respuestas/?pregunta_id=${preguntaId}&opcion_elegida=${opcionElegida}`, {
+        method: 'POST',
+    });
+
+// ── Progreso ─────────────────────────────────────────────────
+
+/** Resumen grupal de una actividad (docente) */
+export const getResumenGrupal = (actividadId) =>
+    apiFetch(`/progreso/resumen/actividad/${actividadId}`);
+
+/** Resumen pedagógico generado con IA (docente) */
+export const getResumenIA = () => apiFetch('/progreso/resumen-ia');
+
+/** Progreso de un alumno en una actividad específica */
+export const getProgresoAlumno = (alumnoId, actividadId) =>
+    apiFetch(`/progreso/alumno/${alumnoId}/actividad/${actividadId}`);

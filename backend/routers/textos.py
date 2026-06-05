@@ -44,6 +44,30 @@ def listar_textos(
     textos = session.exec(select(Texto).where(Texto.docente_id == docente.id)).all()
     return textos
 
+@router.get("/mis-actividades")
+def mis_actividades(
+    session: Session = Depends(get_session),
+    docente: Usuario = Depends(solo_docente)
+):
+    """Devuelve los textos del docente con el estado de su actividad asociada."""
+    textos = session.exec(select(Texto).where(Texto.docente_id == docente.id)).all()
+    resultado = []
+    for t in textos:
+        act = session.exec(
+            select(Actividad).where(Actividad.texto_id == t.id)
+        ).first()
+        resultado.append({
+            "texto_id": t.id,
+            "titulo": t.titulo,
+            "palabras": len(t.contenido.split()),
+            "creado_en": t.creado_en,
+            "actividad_id": act.id if act else None,
+            "validada": act.validada if act else None,
+        })
+    return resultado
+
+
+
 @router.get("/disponibles")
 def textos_disponibles(
     session: Session = Depends(get_session),

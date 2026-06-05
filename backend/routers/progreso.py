@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
+import logging
 
 from backend.database import get_session
 from backend.models import Actividad, Texto, Usuario, Respuesta
@@ -10,6 +11,7 @@ from backend.services.nivel_service import (
     actividad_completa,
 )
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/progreso", tags=["Progreso y reportes"])
 
 
@@ -125,3 +127,24 @@ def resumen_grupal(
         "promedio_aciertos_clase": promedio_aciertos,
         "alumnos": progresos,
     }
+
+# --- Resumen de la clase generado por IA ---
+@router.get("/resumen-ia")
+def resumen_ia(
+    session: Session = Depends(get_session),
+    docente: Usuario = Depends(solo_docente),
+):
+    """
+    Genera un párrafo de análisis pedagógico de la clase usando Gemini.
+    Toma los datos reales de alumnos, respuestas y actividades del docente.
+    """
+    from backend.services.resumen_service import generar_resumen_clase
+    try:
+        resumen = generar_resumen_clase(docente.id, docente.nombre, session)
+        return {"resumen": resumen}
+    except Exception as e:
+        logger.error("Error al generar resumen IA para docente %s: %s", docente.id, e)
+        raise HTTPException(
+            status_code=503,
+            detail="No se pudo generar el resumen en este momento. Intentá de nuevo.",
+        )

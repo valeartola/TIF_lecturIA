@@ -1,3 +1,4 @@
+from backend.domain import actividad
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 import json
@@ -47,7 +48,11 @@ def generar(
     session.commit()
     session.refresh(actividad)
 
+    preguntas_con_id = {}
+
     for dificultad, preguntas in resultado["preguntas_por_nivel"].items():
+        preguntas_con_id[dificultad] = []
+
         for p in preguntas:
             pregunta = Pregunta(
                 actividad_id=actividad.id,
@@ -58,12 +63,24 @@ def generar(
                 tipo=p["tipo"],
                 validada=False
             )
+
             session.add(pregunta)
+            session.flush()  # esto hace que pregunta.id ya exista antes del commit
+
+            preguntas_con_id[dificultad].append({
+                "id": pregunta.id,
+                "pregunta": p["pregunta"],
+                "opciones": p["opciones"],
+                "correcta": p["correcta"],
+                "tipo": p["tipo"],
+                "validada": pregunta.validada,
+            })
+
     session.commit()
 
     return {
         "id": actividad.id,
-        "preguntas_por_nivel": resultado["preguntas_por_nivel"],
+        "preguntas_por_nivel": preguntas_con_id,
         "metricas": resultado["metricas"]
     }
 

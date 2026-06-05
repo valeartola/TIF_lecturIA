@@ -140,3 +140,21 @@ class GeminiClient(LLMClient):
                 logger.warning(f"   [gemini] error, reintentando en {self.ESPERA_CONEXION_S}s (intento {intento + 1}/3)...")
                 time.sleep(self.ESPERA_CONEXION_S)
         raise RuntimeError("GeminiClient: no se pudo conectar tras varios reintentos")
+
+    def llamar_texto(self, prompt: str, temperatura: float = 0.7) -> str:
+        """Igual que llamar() pero devuelve texto libre, sin forzar JSON."""
+        time.sleep(self.PAUSA_ENTRE_LLAMADAS_S)
+        for intento in range(3):
+            try:
+                respuesta = self._client.models.generate_content(
+                    model=self.MODELO,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(temperature=temperatura),
+                )
+                return respuesta.text.strip()
+            except Exception:
+                if intento == 2:
+                    raise
+                logger.warning(f"   [gemini] error en llamar_texto, reintentando ({intento + 1}/3)...")
+                time.sleep(self.ESPERA_CONEXION_S)
+        raise RuntimeError("GeminiClient: no se pudo conectar tras varios reintentos")
