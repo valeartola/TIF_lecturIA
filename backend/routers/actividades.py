@@ -1,77 +1,211 @@
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 import json
 
 from backend.database import get_session
-from backend.models import Texto, Actividad
-from backend.ia.generador import generar_actividad
+from backend.models import Texto, Actividad, Pregunta, Usuario
+from backend.services.generador import Generador
+from backend.services.juez import Juez
+from backend.services.llm_client import GroqClient, UMCloudClient, GeminiClient
+from backend.config.settings import get_settings
+from backend.auth import solo_docente, solo_alumno
 
 router = APIRouter(prefix="/actividades", tags=["Actividades"])
 
 
+def _crear_generador_y_juez():
+    settings = get_settings()
+    groq_client = GroqClient(api_key=settings.groq_api_key)
+    gemini_client = GeminiClient(api_key=settings.gemini_api_key)
+    return Generador(cliente=groq_client), Juez(cliente=gemini_client)
+
 @router.post("/generar")
 def generar(
     texto_id: int,
-    dificultad: str = "MEDIA",
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    docente: Usuario = Depends(solo_docente)
 ):
-    # Verificar que el texto existe
     texto = session.get(Texto, texto_id)
     if not texto:
         raise HTTPException(status_code=404, detail="Texto no encontrado")
 
-    # Validar dificultad
-    # Mapeo para aceptar con y sin tilde
-    mapeo = {"FACIL": "FÁCIL", "MEDIA": "MEDIA", "DIFICIL": "DIFÍCIL"}
-    if dificultad in mapeo:
-        dificultad = mapeo[dificultad]
-    if dificultad not in ["FÁCIL", "MEDIA", "DIFÍCIL"]:
-        raise HTTPException(status_code=400, detail="Dificultad debe ser FACIL, MEDIA o DIFICIL")
-    # Generar actividad con IA
-    resultado = generar_actividad(texto.contenido, dificultad=dificultad)
+    generador, juez = _crear_generador_y_juez()
+    try:
+        resultado = generador.generar_actividad(juez, texto.contenido)
+    except Exception as exc:
+        # Falla del servicio de IA (caída, timeout, cuota agotada, etc.):
+        # no es un error nuestro, así que devolvemos un 503 claro en vez de un 500.
+        import logging
+        logging.getLogger("lecturia").error("Falló la generación con IA", exc_info=exc)
+        raise HTTPException(
+            status_code=503,
+            detail="El servicio de IA no está disponible en este momento. Intentá más tarde.",
+        )
 
-    # Guardar en base de datos
-    actividad = Actividad(
-        texto_id=texto_id,
-        dificultad=dificultad,
-        preguntas_json=json.dumps(resultado["preguntas"], ensure_ascii=False),
-        validada=False
-    )
+    actividad = Actividad(texto_id=texto_id, validada=False)
     session.add(actividad)
     session.commit()
     session.refresh(actividad)
 
+    for dificultad, preguntas in resultado["preguntas_por_nivel"].items():
+        for p in preguntas:
+            pregunta = Pregunta(
+                actividad_id=actividad.id,
+                dificultad=dificultad,
+                enunciado=p["pregunta"],
+                opciones_json=json.dumps(p["opciones"], ensure_ascii=False),
+                opcion_correcta=p["correcta"],
+                tipo=p["tipo"],
+                validada=False
+            )
+            session.add(pregunta)
+    session.commit()
+
     return {
         "id": actividad.id,
-        "dificultad": dificultad,
-        "preguntas": resultado["preguntas"],
+        "preguntas_por_nivel": resultado["preguntas_por_nivel"],
         "metricas": resultado["metricas"]
     }
 
 
 @router.get("/{actividad_id}")
-def obtener_actividad(actividad_id: int, session: Session = Depends(get_session)):
+def obtener_actividad(
+    actividad_id: int,
+    session: Session = Depends(get_session),
+    docente: Usuario = Depends(solo_docente)
+):
     actividad = session.get(Actividad, actividad_id)
     if not actividad:
         raise HTTPException(status_code=404, detail="Actividad no encontrada")
+
+    preguntas = session.exec(
+        select(Pregunta).where(Pregunta.actividad_id == actividad_id)
+    ).all()
+
+    por_nivel = {"FÁCIL": [], "MEDIA": [], "DIFÍCIL": []}
+    for p in preguntas:
+        por_nivel[p.dificultad].append({
+            "id": p.id,
+            "enunciado": p.enunciado,
+            "opciones": json.loads(p.opciones_json),
+            "opcion_correcta": p.opcion_correcta,
+            "tipo": p.tipo,
+            "validada": p.validada
+        })
 
     return {
         "id": actividad.id,
         "texto_id": actividad.texto_id,
-        "dificultad": actividad.dificultad,
-        "preguntas": json.loads(actividad.preguntas_json),
-        "validada": actividad.validada
+        "validada": actividad.validada,
+        "preguntas_por_nivel": por_nivel
     }
 
 
+# Mínimo de preguntas validadas que debe tener cada nivel para poder publicar.
+# Ajustable: subilo si querés exigir más cobertura por nivel.
+MIN_PREGUNTAS_VALIDADAS_POR_NIVEL = 2
+NIVELES = ["FÁCIL", "MEDIA", "DIFÍCIL"]
+
+
+def _preguntas_validadas_por_nivel(actividad_id: int, session: Session) -> dict:
+    preguntas = session.exec(
+        select(Pregunta).where(
+            Pregunta.actividad_id == actividad_id,
+            Pregunta.validada == True,
+        )
+    ).all()
+    conteo = {nivel: 0 for nivel in NIVELES}
+    for p in preguntas:
+        if p.dificultad in conteo:
+            conteo[p.dificultad] += 1
+    return conteo
+
+
 @router.patch("/{actividad_id}/validar")
-def validar_actividad(actividad_id: int, session: Session = Depends(get_session)):
+def validar_actividad(
+    actividad_id: int,
+    session: Session = Depends(get_session),
+    docente: Usuario = Depends(solo_docente)
+):
     actividad = session.get(Actividad, actividad_id)
     if not actividad:
         raise HTTPException(status_code=404, detail="Actividad no encontrada")
+
+    conteo = _preguntas_validadas_por_nivel(actividad_id, session)
+    faltantes = {
+        nivel: MIN_PREGUNTAS_VALIDADAS_POR_NIVEL - cantidad
+        for nivel, cantidad in conteo.items()
+        if cantidad < MIN_PREGUNTAS_VALIDADAS_POR_NIVEL
+    }
+    if faltantes:
+        detalle = ", ".join(
+            f"{nivel} (faltan {n})" for nivel, n in faltantes.items()
+        )
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"No se puede publicar: cada nivel necesita al menos "
+                f"{MIN_PREGUNTAS_VALIDADAS_POR_NIVEL} preguntas validadas. "
+                f"Faltan en: {detalle}"
+            ),
+        )
 
     actividad.validada = True
     session.add(actividad)
     session.commit()
 
-    return {"mensaje": "Actividad validada correctamente", "id": actividad_id}
+    return {
+        "mensaje": "Actividad validada correctamente",
+        "id": actividad_id,
+        "preguntas_validadas_por_nivel": conteo,
+    }
+
+
+@router.patch("/preguntas/{pregunta_id}/validar")
+def validar_pregunta(
+    pregunta_id: int,
+    session: Session = Depends(get_session),
+    docente: Usuario = Depends(solo_docente)
+):
+    pregunta = session.get(Pregunta, pregunta_id)
+    if not pregunta:
+        raise HTTPException(status_code=404, detail="Pregunta no encontrada")
+
+    pregunta.validada = True
+    session.add(pregunta)
+    session.commit()
+
+    return {"mensaje": "Pregunta validada correctamente", "id": pregunta_id}
+
+
+@router.get("/{actividad_id}/alumno/proxima")
+def proxima_pregunta(
+    actividad_id: int,
+    session: Session = Depends(get_session),
+    alumno: Usuario = Depends(solo_alumno)
+):
+    actividad = session.get(Actividad, actividad_id)
+    if not actividad:
+        raise HTTPException(status_code=404, detail="Actividad no encontrada")
+    if not actividad.validada:
+        raise HTTPException(status_code=403, detail="Actividad no publicada aún")
+
+    texto = session.get(Texto, actividad.texto_id)
+    if texto.docente_id != alumno.docente_id:
+        raise HTTPException(status_code=403, detail="No tenés acceso a esta actividad")
+
+    from backend.services.nivel_service import proxima_pregunta as get_proxima
+    pregunta, nivel = get_proxima(alumno.id, actividad_id, session)
+
+    if not pregunta:
+        return {"finalizada": True, "mensaje": "El alumno completó la actividad"}
+
+    return {
+        "finalizada": False,
+        "nivel_actual": nivel,
+        "pregunta": {
+            "id": pregunta.id,
+            "enunciado": pregunta.enunciado,
+            "opciones": json.loads(pregunta.opciones_json),
+        }
+    }
