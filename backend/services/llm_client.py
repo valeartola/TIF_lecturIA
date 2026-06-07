@@ -21,7 +21,7 @@ from google.genai import types
 class LLMClient(ABC):
     """Clase base abstracta para clientes de modelos de lenguaje."""
 
-    MAX_ESPERA_S = 600
+    MAX_ESPERA_S = 60
     ESPERA_CONEXION_S = 5
 
     @abstractmethod

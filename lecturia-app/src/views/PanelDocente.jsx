@@ -3,7 +3,7 @@ import { C } from '../constants/colors';
 import {
     listarAlumnos, listarMisActividades, subirTexto,
     generarActividad, validarPregunta, publicarActividad,
-    getResumenIA, crearAlumno, getResumenGrupal,
+    getResumenIA, crearAlumno, getResumenGrupal, eliminarActividad,
 } from '../api';
 
 // ── Colores de actividades ────────────────────────────────────
@@ -13,29 +13,18 @@ const ACT_COLORS = [C.blue, C.green, C.yellow, C.pink, C.red];
 const levelColor = (l) => ({ Avanzado: C.green, Intermedio: C.yellow, Básico: C.red }[l] || C.gray);
 const levelBg = (l) => ({ Avanzado: '#E8F5EB', Intermedio: '#FFF8E1', Básico: '#FEECEC' }[l] || '#eee');
 
-const CHART_DATA = [
-    { name: 'El Pequeño\nPríncipe', pct: 82 },
-    { name: 'La Tortuga\ny la Liebre', pct: 74 },
-    { name: 'El Mago\nde Oz', pct: 91 },
-    { name: 'Caperucita\nRoja', pct: 68 },
-    { name: 'Las Fábulas\nde Esopo', pct: 77 },
-];
-
 // ── NAV ──────────────────────────────────────────────────────
 const NAV = [
     { id: 'clase', label: 'Mi Clase', icon: '👨‍🏫' },
     { id: 'actividades', label: 'Actividades', icon: '📖' },
     { id: 'progreso', label: 'Progreso', icon: '📊' },
-    { id: 'alertas', label: 'Alertas', icon: '🔔' },
-    { id: 'config', label: 'Configuración', icon: '⚙️' },
 ];
 
 const SECTION_META = {
     clase: { title: 'Mi Clase', sub: 'Gestión de alumnos' },
     actividades: { title: 'Actividades de lectura 📖', sub: '' },
     progreso: { title: 'Progreso del grupo', sub: 'Resumen de desempeño' },
-    alertas: { title: 'Alertas', sub: 'Alumnos que necesitan atención' },
-    config: { title: 'Configuración', sub: 'Ajustes de la cuenta' },
+
 };
 
 const THEME = {
@@ -141,7 +130,7 @@ function ProgressBar({ pct, color }) {
 // ══════════════════════════════════════════════════════════════
 const nivelLabel = (n) => ({ 'FÁCIL': 'Básico', 'MEDIA': 'Intermedio', 'DIFÍCIL': 'Avanzado' }[n] || '—');
 
-function ProgresoContent({ students, loadingStudents, resumen, loadingResumen, progresoActs, loadingProgreso }) {
+function ProgresoContent({ students, loadingStudents, resumen, loadingResumen, progresoActs, loadingProgreso, onActualizarResumen }) {
     const { card } = THEME;
 
     // Métricas reales derivadas de progresoActs
@@ -178,7 +167,10 @@ function ProgresoContent({ students, loadingStudents, resumen, loadingResumen, p
                 <div style={{ background: `linear-gradient(135deg, ${C.blue}, ${C.blueDark})`, borderRadius: card.radius, padding: '20px 24px', marginBottom: 28, display: 'flex', gap: 16, alignItems: 'flex-start' }}>
                     <div style={{ fontSize: 28, flexShrink: 0, marginTop: 2 }}>✨</div>
                     <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 12, fontWeight: 800, color: 'rgba(255,255,255,0.7)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>Análisis de tu clase · Generado con IA</div>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                            <div style={{ fontSize: 12, fontWeight: 800, color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase', letterSpacing: 0.5 }}>Análisis de tu clase · Generado con IA</div>
+                            {!loadingResumen && <button onClick={onActualizarResumen} style={{ background: 'rgba(255,255,255,0.18)', border: 'none', borderRadius: 8, padding: '4px 12px', fontSize: 11.5, fontWeight: 800, color: '#fff', cursor: 'pointer', fontFamily: 'Nunito' }}>↻ Actualizar</button>}
+                        </div>
                         {loadingResumen
                             ? <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}><div style={{ width: 18, height: 18, border: '3px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.9s linear infinite' }} /><span style={{ fontSize: 14, color: 'rgba(255,255,255,0.75)', fontWeight: 600 }}>Generando análisis…</span></div>
                             : <p style={{ fontSize: 14, color: '#fff', lineHeight: 1.7, fontWeight: 500, margin: 0 }}>{resumen}</p>
@@ -422,18 +414,14 @@ const fieldStyle = { padding: '10px 14px', borderRadius: 10, border: '1.5px soli
 
 // ══════════════════════════════════════════════════════════════
 // ══════════════════════════════════════════════════════════════
-function ActivityCard({ act, color, onVerResultados }) {
+function ActivityCard({ act, color, onVerResultados, onEliminar }) {
     const fecha = act.creado_en ? new Date(act.creado_en).toLocaleDateString('es-AR', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
-    const icons = ['📖', '🌟', '🧺', '🦁', '🦊', '🐢', '🌹', '🎭', '🌍', '🎓'];
-    const icon = icons[act.texto_id % icons.length];
     return (
         <div style={{ background: '#fff', borderRadius: 18, boxShadow: '0 2px 14px rgba(0,0,0,0.07)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
             <div style={{ background: color, padding: '18px 20px', display: 'flex', alignItems: 'center', gap: 14, position: 'relative', overflow: 'hidden' }}>
-                <div style={{ position: 'absolute', right: -8, bottom: -14, fontSize: 64, opacity: 0.18 }}>{icon}</div>
-                <div style={{ width: 48, height: 48, borderRadius: 14, background: 'rgba(255,255,255,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, flexShrink: 0 }}>{icon}</div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                     <h3 style={{ fontSize: 16, fontWeight: 900, color: '#fff', lineHeight: 1.2 }}>{act.titulo}</h3>
-                    <div style={{ fontSize: 11.5, color: 'rgba(255,255,255,0.85)', fontWeight: 700, marginTop: 3 }}>📅 {fecha}</div>
+                    <div style={{ fontSize: 11.5, color: 'rgba(255,255,255,0.85)', fontWeight: 700, marginTop: 3 }}> {fecha}</div>
                 </div>
             </div>
             <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12, flex: 1 }}>
@@ -442,13 +430,15 @@ function ActivityCard({ act, color, onVerResultados }) {
                         {act.validada ? '✓ Publicada' : '⏳ Borrador'}
                     </span>
                     <span style={{ background: 'rgba(0,0,0,0.05)', color: '#666', fontSize: 11.5, fontWeight: 800, borderRadius: 20, padding: '3px 11px' }}>
-                        📝 {act.palabras?.toLocaleString()} palabras
+                        {act.palabras?.toLocaleString()} palabras
                     </span>
                 </div>
                 <div style={{ display: 'flex', gap: 8, marginTop: 'auto' }}>
-                    <button style={{ flex: 1, background: 'transparent', border: `2px solid ${C.blue}22`, borderRadius: 10, padding: '7px 12px', fontSize: 12, fontWeight: 800, color: C.blue, cursor: 'pointer', fontFamily: 'Nunito' }}>Editar</button>
                     {act.validada && act.actividad_id && <button onClick={() => onVerResultados(act.actividad_id, act.titulo)} style={{ flex: 1, background: C.blue, border: 'none', borderRadius: 10, padding: '7px 14px', fontSize: 12, fontWeight: 800, color: '#fff', cursor: 'pointer', fontFamily: 'Nunito' }}>Ver resultados</button>}
                     {!act.validada && act.actividad_id && <button style={{ flex: 1, background: C.green, border: 'none', borderRadius: 10, padding: '7px 14px', fontSize: 12, fontWeight: 800, color: '#fff', cursor: 'pointer', fontFamily: 'Nunito' }}>Publicar</button>}
+                    {act.actividad_id && (
+                        <button onClick={() => onEliminar(act.actividad_id)} style={{ background: 'transparent', border: `2px solid #ff4d4f44`, borderRadius: 10, padding: '7px 10px', fontSize: 14, cursor: 'pointer', color: '#ff4d4f', lineHeight: 1 }} title="Eliminar actividad">🗑</button>
+                    )}
                 </div>
             </div>
         </div>
@@ -811,7 +801,7 @@ function Toast({ msg }) {
 // ══════════════════════════════════════════════════════════════
 // CONTENIDO — Actividades
 // ══════════════════════════════════════════════════════════════
-function ActividadesContent({ acts, loading, onOpenModal, onVerResultados }) {
+function ActividadesContent({ acts, loading, onOpenModal, onVerResultados, onEliminar }) {
     const publicadas = acts.filter((a) => a.validada).length;
     return (
         <>
@@ -840,7 +830,7 @@ function ActividadesContent({ acts, loading, onOpenModal, onVerResultados }) {
                 : (
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 20 }}>
                         <NewActivityCard onClick={onOpenModal} />
-                        {acts.map((act, i) => <ActivityCard key={act.texto_id} act={act} color={ACT_COLORS[i % ACT_COLORS.length]} onVerResultados={onVerResultados} />)}
+                        {acts.map((act, i) => <ActivityCard key={act.texto_id} act={act} color={ACT_COLORS[i % ACT_COLORS.length]} onVerResultados={onVerResultados} onEliminar={onEliminar} />)}
                     </div>
                 )
             }
@@ -878,19 +868,22 @@ export default function PanelDocente({ user, onLogout }) {
         listarMisActividades().then(setActs).catch(() => { }).finally(() => setLoadingActs(false));
     }, []);
 
-    useEffect(() => {
-        if (activeNav !== 'progreso') return;
-        if (resumen) return;
+    const recargarResumenIA = () => {
+        setResumen('');
         setLoadingResumen(true);
         getResumenIA().then(d => setResumen(d.resumen || '')).catch(() => { }).finally(() => setLoadingResumen(false));
-    }, [activeNav]);
+    };
 
-    // Carga el resumen real de cada actividad publicada al entrar a Progreso
     useEffect(() => {
         if (activeNav !== 'progreso') return;
-        if (progresoActs.length > 0) return;
+        if (resumen) return;  // solo carga la primera vez; el docente puede forzar actualización
+        recargarResumenIA();
+    }, [activeNav]);
+
+    // Recarga métricas de progreso cada vez que cambian las actividades o se entra a la sección
+    useEffect(() => {
         const publicadas = acts.filter(a => a.validada && a.actividad_id);
-        if (publicadas.length === 0) return;
+        if (publicadas.length === 0) { setProgresoActs([]); return; }
         setLoadingProgreso(true);
         Promise.all(
             publicadas.map(a =>
@@ -900,13 +893,27 @@ export default function PanelDocente({ user, onLogout }) {
             )
         ).then(results => setProgresoActs(results.filter(Boolean)))
             .finally(() => setLoadingProgreso(false));
-    }, [activeNav, acts]);
+    }, [acts]);
+
+    const handleEliminar = async (actividadId) => {
+        if (!window.confirm('¿Eliminás esta actividad? Esta acción no se puede deshacer.')) return;
+        try {
+            await eliminarActividad(actividadId);
+            setActs(prev => prev.filter(a => a.actividad_id !== actividadId));
+            setResumen('');
+            setToast('Actividad eliminada correctamente');
+            setTimeout(() => setToast(''), 3000);
+        } catch (err) {
+            setToast('No se pudo eliminar la actividad');
+            setTimeout(() => setToast(''), 3000);
+        }
+    };
 
     const handlePublish = (data) => {
         setModal(false);
         setToast(`"${data.titulo}" publicada correctamente`);
         setTimeout(() => setToast(''), 3500);
-        setProgresoActs([]);
+        setResumen('');
         listarMisActividades().then(setActs).catch(() => { });
     };
 
@@ -914,10 +921,10 @@ export default function PanelDocente({ user, onLogout }) {
 
     const renderContent = () => {
         if (activeNav === 'actividades')
-            return <ActividadesContent acts={acts} loading={loadingActs} onOpenModal={() => setModal(true)} onVerResultados={(id, titulo) => setResultadosModal({ actividad_id: id, titulo })} />;
+            return <ActividadesContent acts={acts} loading={loadingActs} onOpenModal={() => setModal(true)} onVerResultados={(id, titulo) => setResultadosModal({ actividad_id: id, titulo })} onEliminar={handleEliminar} />;
         if (activeNav === 'clase')
             return <MiClaseContent students={students} loadingStudents={loadingStudents} codigoClase={user?.codigo_clase} onAlumnoCreado={() => { recargarAlumnos(); setToast('Alumno creado correctamente'); setTimeout(() => setToast(''), 3000); }} />;
-        return <ProgresoContent students={students} loadingStudents={loadingStudents} resumen={resumen} loadingResumen={loadingResumen} progresoActs={progresoActs} loadingProgreso={loadingProgreso} />;
+        return <ProgresoContent students={students} loadingStudents={loadingStudents} resumen={resumen} loadingResumen={loadingResumen} progresoActs={progresoActs} loadingProgreso={loadingProgreso} onActualizarResumen={recargarResumenIA} />;
     };
 
     return (
@@ -928,11 +935,8 @@ export default function PanelDocente({ user, onLogout }) {
                 <div style={{ background: THEME.topbar.bg, borderBottom: `1px solid ${THEME.topbar.border}`, padding: '0 28px', height: 64, display: 'flex', alignItems: 'center', gap: 16, flexShrink: 0 }}>
                     <button onClick={() => setCollapsed(c => !c)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 4, borderRadius: 8, color: THEME.heading, fontSize: 18, lineHeight: 1 }}>☰</button>
                     <div style={{ flex: 1 }}>
-                        <span style={{ fontSize: 15, fontWeight: 700, color: THEME.heading }}>Bienvenida, {user?.nombre || 'Docente'} 👋</span>
+                        <span style={{ fontSize: 15, fontWeight: 700, color: THEME.heading }}>Hola, {user?.nombre || 'Docente'}</span>
                         <span style={{ fontSize: 13, color: THEME.subtext, marginLeft: 10 }}>{sub}</span>
-                    </div>
-                    <div style={{ width: 38, height: 38, borderRadius: '50%', background: C.yellow, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: 15, color: C.dark }}>
-                        {user?.nombre?.[0]?.toUpperCase() || 'D'}
                     </div>
                 </div>
 

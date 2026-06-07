@@ -110,7 +110,7 @@ export default function Estudiante({ user, onLogout }) {
           <img src="/uploads/MiniLogo.png" alt="LecturIA" style={{ width: 36, height: 36, objectFit: 'contain', borderRadius: 8 }} />
           <span style={{ fontWeight: 900, fontSize: 18, color: C.green }}>Lectur<span style={{ color: C.yellow }}>IA</span></span>
           <div style={{ flex: 1 }} />
-          <span style={{ fontSize: 13, fontWeight: 700, color: '#888' }}>Hola, {user?.nombre || 'Estudiante'} 👋</span>
+          <span style={{ fontSize: 13, fontWeight: 700, color: '#888' }}>Hola, {user?.nombre || 'Estudiante'}</span>
           <div onClick={onLogout} title="Cerrar sesión" style={{ width: 36, height: 36, borderRadius: '50%', background: C.pink, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: 14, color: '#fff', cursor: 'pointer' }}>
             {user?.nombre?.[0]?.toUpperCase() || 'A'}
           </div>
@@ -156,7 +156,7 @@ export default function Estudiante({ user, onLogout }) {
   if (screen === 'done') {
     const pct = answered > 0 ? Math.round(correct / answered * 100) : 0;
     return (
-      <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', fontFamily: 'Nunito', background: '#fff', gap: 24, padding: 32 }}>
+      <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', fontFamily: 'Nunito', background: C.cream, gap: 24, padding: 32 }}>
         <div style={{ width: 100, height: 100, borderRadius: '50%', background: pct >= 70 ? C.green : pct >= 50 ? C.yellow : C.red, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 48 }}>
           {pct >= 70 ? '🏆' : pct >= 50 ? '⭐' : '💪'}
         </div>

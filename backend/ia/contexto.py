@@ -1,6 +1,100 @@
 import json
 
 
+def construir_prompt_juez_lote(
+    texto, preguntas, dificultad, tipo, specs, aspectos_previos=None
+):
+    """
+    Construye el prompt para el JUEZ en modo batch.
+
+    Evalúa una lista de preguntas en una sola llamada al LLM.
+    El texto y las specs se envían una sola vez, reduciendo significativamente
+    el consumo de tokens frente a llamadas individuales por pregunta.
+
+    Args:
+        texto: el texto fuente (ya truncado).
+        preguntas: lista de dicts con pregunta, opciones, correcta.
+        dificultad: FÁCIL, MEDIA o DIFÍCIL pedida al generador.
+        tipo: tipo de pregunta pedido al generador.
+        specs: pedagogía + rúbrica (de specs_para_juez()).
+        aspectos_previos: lista de strings con aspectos ya cubiertos por
+            preguntas aprobadas anteriores al lote actual.
+    """
+    if aspectos_previos:
+        lista = "\n".join(f"- {a}" for a in aspectos_previos)
+        bloque_aspectos = f"""
+## ASPECTOS YA CUBIERTOS (preguntas aprobadas antes de este lote)
+{lista}
+
+Usá esta lista para evaluar D4 (No repetición) de cada pregunta.
+También tenés en cuenta la repetición entre preguntas del mismo lote.
+"""
+    else:
+        bloque_aspectos = """
+## ASPECTOS YA CUBIERTOS
+(ninguna pregunta aprobada previa — primera generación de esta actividad)
+
+D4 = 5 automáticamente para la primera pregunta del lote que no repita
+aspectos con las demás del mismo lote.
+"""
+
+    preguntas_json = json.dumps(
+        [{"indice": i, **p} for i, p in enumerate(preguntas)],
+        ensure_ascii=False,
+        indent=2
+    )
+
+    n = len(preguntas)
+    return f"""Sos un evaluador pedagógico de preguntas de comprensión lectora.
+Tu tarea es evaluar un lote de {n} preguntas en una sola respuesta.
+Aplicá la rúbrica con criterio estricto pero justo, basándote
+únicamente en el texto provisto y en los criterios pedagógicos.
+
+## CRITERIOS Y RÚBRICA
+{specs}
+
+## TEXTO FUENTE
+{texto}
+
+## PARÁMETROS DEL LOTE
+- Tipo solicitado al generador: {tipo}
+- Dificultad solicitada al generador: {dificultad}
+
+## PREGUNTAS A EVALUAR
+{preguntas_json}
+{bloque_aspectos}
+## INSTRUCCIONES
+Evaluá cada pregunta en las cuatro dimensiones (contenido_texto,
+respuesta_correcta_unica, nivel_adecuado, no_repeticion) según la rúbrica.
+La opción correcta de cada pregunta es la que está en la posición indicada
+por el campo "correcta" (0-indexed).
+
+Para evaluar D4, considerá tanto los aspectos previos listados arriba
+como los aspectos cubiertos por las otras preguntas del mismo lote.
+
+Devolvé ÚNICAMENTE un JSON válido con un array de {n} objetos, uno por
+pregunta, en el mismo orden en que aparecen arriba. Sin texto extra, sin
+markdown:
+
+[
+  {{
+    "indice": 0,
+    "contenido_texto": <1-5>,
+    "respuesta_correcta_unica": <1-5>,
+    "nivel_adecuado": <1-5>,
+    "no_repeticion": <1-5>,
+    "aspecto_cubierto": "frase corta (3-7 palabras) sobre qué aspecto cubre",
+    "aprobada": <true|false>,
+    "comentarios": "qué está bien y qué se podría mejorar",
+    "sugerencia_mejora": "instrucción concreta si aprobada=false, si no string vacío"
+  }},
+  ...
+]
+
+Recordá: aprobada=true solo si TODAS las cuatro dimensiones tienen puntaje ≥ 3.
+"""
+
+
 def construir_prompt_generador(
     texto, dificultad, tipo, pos, preguntas_anteriores, specs,
     feedback=None, aspectos_previos=None

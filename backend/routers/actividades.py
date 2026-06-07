@@ -85,6 +85,43 @@ def generar(
     }
 
 
+@router.delete("/{actividad_id}")
+def eliminar_actividad(
+    actividad_id: int,
+    session: Session = Depends(get_session),
+    docente: Usuario = Depends(solo_docente)
+):
+    actividad = session.get(Actividad, actividad_id)
+    if not actividad:
+        raise HTTPException(status_code=404, detail="Actividad no encontrada")
+
+    # Verificar que el texto pertenece al docente que hace el pedido
+    texto = session.get(Texto, actividad.texto_id)
+    if texto.docente_id != docente.id:
+        raise HTTPException(status_code=403, detail="No tenés permiso para eliminar esta actividad")
+
+    from backend.models import Respuesta
+
+    # Eliminar en orden por FK: respuestas → preguntas → actividad → texto
+    respuestas = session.exec(
+        select(Respuesta).where(Respuesta.actividad_id == actividad_id)
+    ).all()
+    for r in respuestas:
+        session.delete(r)
+
+    preguntas = session.exec(
+        select(Pregunta).where(Pregunta.actividad_id == actividad_id)
+    ).all()
+    for p in preguntas:
+        session.delete(p)
+
+    session.delete(actividad)
+    session.delete(texto)
+    session.commit()
+
+    return {"mensaje": "Actividad y texto eliminados correctamente", "id": actividad_id}
+
+
 @router.get("/{actividad_id}")
 def obtener_actividad(
     actividad_id: int,

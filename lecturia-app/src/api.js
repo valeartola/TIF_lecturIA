@@ -108,6 +108,10 @@ export const validarPregunta = (preguntaId) =>
 export const publicarActividad = (actividadId) =>
     apiFetch(`/actividades/${actividadId}/validar`, { method: 'PATCH' });
 
+/** Elimina una actividad y todas sus preguntas (docente) */
+export const eliminarActividad = (actividadId) =>
+    apiFetch(`/actividades/${actividadId}`, { method: 'DELETE' });
+
 /** Siguiente pregunta adaptativa para el alumno */
 export const proximaPregunta = (actividadId) =>
     apiFetch(`/actividades/${actividadId}/alumno/proxima`);
