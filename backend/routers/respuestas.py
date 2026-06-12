@@ -25,14 +25,18 @@ def registrar_respuesta(
     if not actividad or not actividad.validada:
         raise HTTPException(status_code=403, detail="La actividad no está publicada")
 
+    from backend.services.nivel_service import intento_actual
+    intento = intento_actual(alumno.id, pregunta.actividad_id, session)
+
     es_correcta = opcion_elegida == pregunta.opcion_correcta
 
     respuesta = Respuesta(
-        alumno_id=alumno.id,  # viene del token
+        alumno_id=alumno.id,
         pregunta_id=pregunta_id,
         actividad_id=pregunta.actividad_id,
         opcion_elegida=opcion_elegida,
-        es_correcta=es_correcta
+        es_correcta=es_correcta,
+        numero_intento=intento,
     )
     session.add(respuesta)
     session.commit()
@@ -41,7 +45,8 @@ def registrar_respuesta(
         "es_correcta": es_correcta,
         "opcion_elegida": opcion_elegida,
         "opcion_correcta": pregunta.opcion_correcta,
-        "dificultad": pregunta.dificultad
+        "dificultad": pregunta.dificultad,
+        "numero_intento": intento,
     }
 
 

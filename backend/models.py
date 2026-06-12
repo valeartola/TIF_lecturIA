@@ -43,4 +43,5 @@ class Respuesta(SQLModel, table=True):
     pregunta_id: int = Field(foreign_key="pregunta.id")
     opcion_elegida: int
     es_correcta: bool
+    numero_intento: int = Field(default=1)
     respondido_en: datetime = Field(default_factory=datetime.utcnow)

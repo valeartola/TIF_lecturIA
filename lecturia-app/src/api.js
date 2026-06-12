@@ -113,8 +113,16 @@ export const eliminarActividad = (actividadId) =>
     apiFetch(`/actividades/${actividadId}`, { method: 'DELETE' });
 
 /** Siguiente pregunta adaptativa para el alumno */
-export const proximaPregunta = (actividadId) =>
-    apiFetch(`/actividades/${actividadId}/alumno/proxima`);
+export const proximaPregunta = (actividadId, nuevoIntento = false) =>
+    apiFetch(`/actividades/${actividadId}/alumno/proxima${nuevoIntento ? '?nuevo_intento=true' : ''}`);
+
+/** Estado de intentos del alumno para una actividad */
+export const getEstadoIntentos = (actividadId) =>
+    apiFetch(`/actividades/${actividadId}/alumno/intentos`);
+
+/** Obtiene una actividad con sus preguntas (docente) */
+export const getActividad = (actividadId) =>
+    apiFetch(`/actividades/${actividadId}`);
 
 // ── Respuestas ───────────────────────────────────────────────
 

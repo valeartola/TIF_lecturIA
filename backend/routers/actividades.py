@@ -232,8 +232,8 @@ def validar_pregunta(
     return {"mensaje": "Pregunta validada correctamente", "id": pregunta_id}
 
 
-@router.get("/{actividad_id}/alumno/proxima")
-def proxima_pregunta(
+@router.get("/{actividad_id}/alumno/intentos")
+def estado_intentos(
     actividad_id: int,
     session: Session = Depends(get_session),
     alumno: Usuario = Depends(solo_alumno)
@@ -248,18 +248,111 @@ def proxima_pregunta(
     if texto.docente_id != alumno.docente_id:
         raise HTTPException(status_code=403, detail="No tenés acceso a esta actividad")
 
-    from backend.services.nivel_service import proxima_pregunta as get_proxima
-    pregunta, nivel = get_proxima(alumno.id, actividad_id, session)
+    from backend.services.nivel_service import intento_actual, MAX_INTENTOS, cantidad_preguntas_sesion
+    from backend.models import Respuesta
+
+    intento = intento_actual(alumno.id, actividad_id, session)
+    sin_intentos = intento > MAX_INTENTOS
+
+    # Puntajes de cada intento completado
+    puntajes = []
+    tope = cantidad_preguntas_sesion(actividad_id, session)
+    for i in range(1, MAX_INTENTOS + 1):
+        respuestas = session.exec(
+            select(Respuesta).where(
+                Respuesta.alumno_id == alumno.id,
+                Respuesta.actividad_id == actividad_id,
+                Respuesta.numero_intento == i,
+            )
+        ).all()
+        if respuestas:
+            correctas = sum(1 for r in respuestas if r.es_correcta)
+            puntajes.append({
+                "intento": i,
+                "respondidas": len(respuestas),
+                "correctas": correctas,
+                "completo": len(respuestas) >= tope,
+            })
+
+    return {
+        "intento_actual": intento if not sin_intentos else MAX_INTENTOS,
+        "sin_intentos": sin_intentos,
+        "max_intentos": MAX_INTENTOS,
+        "puntajes": puntajes,
+    }
+
+
+@router.get("/{actividad_id}/alumno/proxima")
+def proxima_pregunta(
+    actividad_id: int,
+    nuevo_intento: bool = False,
+    session: Session = Depends(get_session),
+    alumno: Usuario = Depends(solo_alumno)
+):
+    actividad = session.get(Actividad, actividad_id)
+    if not actividad:
+        raise HTTPException(status_code=404, detail="Actividad no encontrada")
+    if not actividad.validada:
+        raise HTTPException(status_code=403, detail="Actividad no publicada aún")
+
+    texto = session.get(Texto, actividad.texto_id)
+    if texto.docente_id != alumno.docente_id:
+        raise HTTPException(status_code=403, detail="No tenés acceso a esta actividad")
+
+    from backend.services.nivel_service import proxima_pregunta as get_proxima, intento_actual, MAX_INTENTOS, actividad_completa, cantidad_preguntas_sesion
+    from backend.models import Respuesta
+
+    # Calcular en qué intento está manualmente para detectar intento recién completado
+    tope = cantidad_preguntas_sesion(actividad_id, session)
+    intento_calculado = 1
+    intento_recien_completado = None
+
+    for i in range(1, MAX_INTENTOS + 1):
+        total = session.exec(
+            select(Respuesta).where(
+                Respuesta.alumno_id == alumno.id,
+                Respuesta.actividad_id == actividad_id,
+                Respuesta.numero_intento == i,
+            )
+        ).all()
+        if len(total) >= tope:
+            intento_recien_completado = i  # este intento está completo
+            intento_calculado = i + 1
+        else:
+            intento_calculado = i
+            break
+
+    # Si todos los intentos están completos
+    if intento_calculado > MAX_INTENTOS and intento_recien_completado:
+        return {"finalizada": True, "sin_intentos": True, "intento_completado": intento_recien_completado}
+
+    # Si el intento anterior se acaba de completar (el actual no tiene respuestas aún)
+    if intento_recien_completado and intento_calculado <= MAX_INTENTOS:
+        respuestas_actuales = session.exec(
+            select(Respuesta).where(
+                Respuesta.alumno_id == alumno.id,
+                Respuesta.actividad_id == actividad_id,
+                Respuesta.numero_intento == intento_calculado,
+            )
+        ).all()
+        if len(respuestas_actuales) == 0 and not nuevo_intento:
+            return {"finalizada": True, "sin_intentos": False, "intento_completado": intento_recien_completado}
+
+    intento = intento_calculado
+
+    pregunta, nivel = get_proxima(alumno.id, actividad_id, intento, session)
 
     if not pregunta:
-        return {"finalizada": True, "mensaje": "El alumno completó la actividad"}
+        return {"finalizada": True, "sin_intentos": False, "intento_completado": intento, "nivel_actual": nivel}
 
     return {
         "finalizada": False,
         "nivel_actual": nivel,
+        "intento_actual": intento,
         "pregunta": {
             "id": pregunta.id,
             "enunciado": pregunta.enunciado,
             "opciones": json.loads(pregunta.opciones_json),
         }
     }
+ 

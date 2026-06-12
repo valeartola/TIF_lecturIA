@@ -3,7 +3,7 @@ import { C } from '../constants/colors';
 import {
     listarAlumnos, listarMisActividades, subirTexto,
     generarActividad, validarPregunta, publicarActividad,
-    getResumenIA, crearAlumno, getResumenGrupal, eliminarActividad,
+    getResumenIA, crearAlumno, getResumenGrupal, eliminarActividad, getActividad,
 } from '../api';
 
 // ── Colores de actividades ────────────────────────────────────
@@ -414,7 +414,7 @@ const fieldStyle = { padding: '10px 14px', borderRadius: 10, border: '1.5px soli
 
 // ══════════════════════════════════════════════════════════════
 // ══════════════════════════════════════════════════════════════
-function ActivityCard({ act, color, onVerResultados, onEliminar }) {
+function ActivityCard({ act, color, onVerPreguntas, onVerResultados, onEliminar }) {
     const fecha = act.creado_en ? new Date(act.creado_en).toLocaleDateString('es-AR', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
     return (
         <div style={{ background: '#fff', borderRadius: 18, boxShadow: '0 2px 14px rgba(0,0,0,0.07)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
@@ -434,6 +434,7 @@ function ActivityCard({ act, color, onVerResultados, onEliminar }) {
                     </span>
                 </div>
                 <div style={{ display: 'flex', gap: 8, marginTop: 'auto' }}>
+                    {act.validada && act.actividad_id && <button onClick={() => onVerPreguntas(act.actividad_id, act.titulo)} style={{ background: 'transparent', border: `1.5px solid ${C.blue}44`, borderRadius: 10, padding: '7px 12px', fontSize: 12, fontWeight: 800, color: C.blue, cursor: 'pointer', fontFamily: 'Nunito' }}>Ver preguntas</button>}
                     {act.validada && act.actividad_id && <button onClick={() => onVerResultados(act.actividad_id, act.titulo)} style={{ flex: 1, background: C.blue, border: 'none', borderRadius: 10, padding: '7px 14px', fontSize: 12, fontWeight: 800, color: '#fff', cursor: 'pointer', fontFamily: 'Nunito' }}>Ver resultados</button>}
                     {!act.validada && act.actividad_id && <button style={{ flex: 1, background: C.green, border: 'none', borderRadius: 10, padding: '7px 14px', fontSize: 12, fontWeight: 800, color: '#fff', cursor: 'pointer', fontFamily: 'Nunito' }}>Publicar</button>}
                     {act.actividad_id && (
@@ -687,6 +688,121 @@ function CreateModal({ onClose, onPublish }) {
 const btnSecondary = { padding: '12px 22px', borderRadius: 12, border: '2px solid rgba(0,0,0,0.1)', background: '#fff', fontSize: 13.5, fontWeight: 800, color: '#888', cursor: 'pointer', fontFamily: 'Nunito' };
 const btnPrimary = { padding: '12px 24px', borderRadius: 12, border: 'none', fontSize: 13.5, fontWeight: 800, color: '#fff', fontFamily: 'Nunito' };
 
+
+// ══════════════════════════════════════════════════════════════
+// MODAL DE PREGUNTAS — ver preguntas de una actividad publicada
+// ══════════════════════════════════════════════════════════════
+const NIVEL_LABEL = { 'FÁCIL': 'Básico', 'MEDIA': 'Intermedio', 'DIFÍCIL': 'Avanzado' };
+const NIVEL_COLOR = { 'FÁCIL': C.green, 'MEDIA': C.yellow, 'DIFÍCIL': C.red };
+
+function PreguntasModal({ actividad_id, titulo, onClose }) {
+    const [data, setData] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [nivelFiltro, setNivelFiltro] = useState('TODOS');
+
+    useEffect(() => {
+        getActividad(actividad_id)
+            .then(d => setData(d))
+            .catch(err => setError(err.message || 'No se pudo cargar'))
+            .finally(() => setLoading(false));
+    }, [actividad_id]);
+
+    const niveles = ['TODOS', 'FÁCIL', 'MEDIA', 'DIFÍCIL'];
+    const preguntasFiltradas = data
+        ? (nivelFiltro === 'TODOS'
+            ? Object.entries(data.preguntas_por_nivel).flatMap(([nivel, ps]) => ps.map(p => ({ ...p, nivel })))
+            : (data.preguntas_por_nivel[nivelFiltro] || []).map(p => ({ ...p, nivel: nivelFiltro })))
+        : [];
+
+    const total = data
+        ? Object.values(data.preguntas_por_nivel).reduce((s, ps) => s + ps.length, 0)
+        : 0;
+
+    return (
+        <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(42,42,42,0.55)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 24, animation: 'fadeIn 0.2s' }}>
+            <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 22, width: '100%', maxWidth: 720, maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 20px 60px rgba(0,0,0,0.28)', animation: 'pop 0.25s ease' }}>
+
+                {/* Header */}
+                <div style={{ background: C.blue, padding: '20px 26px', display: 'flex', alignItems: 'center', gap: 14, flexShrink: 0 }}>
+                    <div style={{ width: 42, height: 42, borderRadius: 12, background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>📋</div>
+                    <div style={{ flex: 1 }}>
+                        <h2 style={{ fontSize: 18, fontWeight: 900, color: '#fff' }}>Preguntas · {titulo}</h2>
+                        <p style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.8)', fontWeight: 600 }}>
+                            {loading ? 'Cargando…' : `${total} preguntas en 3 niveles`}
+                        </p>
+                    </div>
+                    <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: 10, width: 34, height: 34, cursor: 'pointer', color: '#fff', fontSize: 18, fontWeight: 900 }}>×</button>
+                </div>
+
+                {/* Filtro de nivel */}
+                {!loading && !error && (
+                    <div style={{ padding: '14px 26px 0', display: 'flex', gap: 8, flexShrink: 0 }}>
+                        {niveles.map(n => {
+                            const active = nivelFiltro === n;
+                            const color = n === 'TODOS' ? C.blue : NIVEL_COLOR[n];
+                            return (
+                                <button key={n} onClick={() => setNivelFiltro(n)}
+                                    style={{ background: active ? color : color + '15', color: active ? '#fff' : color, border: `1.5px solid ${color}44`, borderRadius: 20, padding: '5px 14px', fontSize: 12, fontWeight: 800, cursor: 'pointer', fontFamily: 'Nunito', transition: 'all 0.15s' }}>
+                                    {n === 'TODOS' ? 'Todos' : NIVEL_LABEL[n]}
+                                    {data && n !== 'TODOS' && (
+                                        <span style={{ marginLeft: 5, opacity: 0.7 }}>({(data.preguntas_por_nivel[n] || []).length})</span>
+                                    )}
+                                </button>
+                            );
+                        })}
+                    </div>
+                )}
+
+                {/* Contenido */}
+                <div style={{ padding: '18px 26px 24px', overflowY: 'auto', flex: 1 }}>
+                    {loading && <div style={{ textAlign: 'center', padding: '40px 0', color: THEME.subtext }}>Cargando preguntas…</div>}
+                    {error && <div style={{ background: '#FEE', border: `1.5px solid ${C.red}`, borderRadius: 12, padding: '12px 16px', color: C.red, fontWeight: 700 }}>⚠️ {error}</div>}
+
+                    {!loading && !error && preguntasFiltradas.length === 0 && (
+                        <div style={{ textAlign: 'center', padding: '40px 0', color: '#bbb', fontSize: 14 }}>No hay preguntas en este nivel.</div>
+                    )}
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                        {preguntasFiltradas.map((q, i) => {
+                            const nColor = NIVEL_COLOR[q.nivel] || C.blue;
+                            const nLabel = NIVEL_LABEL[q.nivel] || q.nivel;
+                            return (
+                                <div key={q.id || i} style={{ border: `1.5px solid rgba(0,0,0,0.08)`, borderRadius: 14, padding: '16px 18px', background: '#fafafa' }}>
+                                    {/* Cabecera de la pregunta */}
+                                    <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: 12 }}>
+                                        <span style={{ width: 28, height: 28, borderRadius: 8, background: nColor, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 900, flexShrink: 0 }}>{i + 1}</span>
+                                        <div style={{ flex: 1 }}>
+                                            <div style={{ display: 'flex', gap: 6, marginBottom: 6, flexWrap: 'wrap' }}>
+                                                <span style={{ background: nColor + '20', color: nColor, fontSize: 11, fontWeight: 800, borderRadius: 20, padding: '2px 10px' }}>{nLabel}</span>
+                                                {q.tipo && <span style={{ background: 'rgba(0,0,0,0.06)', color: '#666', fontSize: 11, fontWeight: 700, borderRadius: 20, padding: '2px 10px' }}>{q.tipo}</span>}
+                                            </div>
+                                            <p style={{ fontSize: 14.5, fontWeight: 700, color: C.dark, margin: 0, lineHeight: 1.45 }}>{q.enunciado || q.pregunta}</p>
+                                        </div>
+                                    </div>
+                                    {/* Opciones */}
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 7, paddingLeft: 38 }}>
+                                        {(q.opciones || []).map((opt, oi) => {
+                                            const isCorrect = oi === (q.opcion_correcta ?? q.correcta);
+                                            return (
+                                                <div key={oi} style={{ fontSize: 13, padding: '7px 12px', borderRadius: 9, background: isCorrect ? C.green + '18' : 'rgba(0,0,0,0.04)', color: isCorrect ? C.green : '#555', fontWeight: isCorrect ? 800 : 600, border: `1.5px solid ${isCorrect ? C.green + '55' : 'transparent'}`, display: 'flex', gap: 7, alignItems: 'center' }}>
+                                                    <span style={{ fontWeight: 900, flexShrink: 0 }}>{['A', 'B', 'C', 'D'][oi]}.</span>
+                                                    {opt}
+                                                    {isCorrect && <span style={{ marginLeft: 'auto', fontSize: 14, flexShrink: 0 }}>✓</span>}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 // ══════════════════════════════════════════════════════════════
 // MODAL DE RESULTADOS POR ACTIVIDAD
 // ══════════════════════════════════════════════════════════════
@@ -801,7 +917,7 @@ function Toast({ msg }) {
 // ══════════════════════════════════════════════════════════════
 // CONTENIDO — Actividades
 // ══════════════════════════════════════════════════════════════
-function ActividadesContent({ acts, loading, onOpenModal, onVerResultados, onEliminar }) {
+function ActividadesContent({ acts, loading, onOpenModal, onVerPreguntas, onVerResultados, onEliminar }) {
     const publicadas = acts.filter((a) => a.validada).length;
     return (
         <>
@@ -830,7 +946,7 @@ function ActividadesContent({ acts, loading, onOpenModal, onVerResultados, onEli
                 : (
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 20 }}>
                         <NewActivityCard onClick={onOpenModal} />
-                        {acts.map((act, i) => <ActivityCard key={act.texto_id} act={act} color={ACT_COLORS[i % ACT_COLORS.length]} onVerResultados={onVerResultados} onEliminar={onEliminar} />)}
+                        {acts.map((act, i) => <ActivityCard key={act.texto_id} act={act} color={ACT_COLORS[i % ACT_COLORS.length]} onVerPreguntas={onVerPreguntas} onVerResultados={onVerResultados} onEliminar={onEliminar} />)}
                     </div>
                 )
             }
@@ -847,6 +963,7 @@ export default function PanelDocente({ user, onLogout }) {
     const [modal, setModal] = useState(false);
     const [toast, setToast] = useState('');
     const [resultadosModal, setResultadosModal] = useState(null);
+    const [preguntasModal, setPreguntasModal] = useState(null);
 
     const [students, setStudents] = useState([]);
     const [loadingStudents, setLoadingStudents] = useState(true);
@@ -921,7 +1038,7 @@ export default function PanelDocente({ user, onLogout }) {
 
     const renderContent = () => {
         if (activeNav === 'actividades')
-            return <ActividadesContent acts={acts} loading={loadingActs} onOpenModal={() => setModal(true)} onVerResultados={(id, titulo) => setResultadosModal({ actividad_id: id, titulo })} onEliminar={handleEliminar} />;
+            return <ActividadesContent acts={acts} loading={loadingActs} onOpenModal={() => setModal(true)} onVerPreguntas={(id, titulo) => setPreguntasModal({ actividad_id: id, titulo })} onVerResultados={(id, titulo) => setResultadosModal({ actividad_id: id, titulo })} onEliminar={handleEliminar} />;
         if (activeNav === 'clase')
             return <MiClaseContent students={students} loadingStudents={loadingStudents} codigoClase={user?.codigo_clase} onAlumnoCreado={() => { recargarAlumnos(); setToast('Alumno creado correctamente'); setTimeout(() => setToast(''), 3000); }} />;
         return <ProgresoContent students={students} loadingStudents={loadingStudents} resumen={resumen} loadingResumen={loadingResumen} progresoActs={progresoActs} loadingProgreso={loadingProgreso} onActualizarResumen={recargarResumenIA} />;
@@ -946,6 +1063,7 @@ export default function PanelDocente({ user, onLogout }) {
             </div>
 
             {modal && <CreateModal onClose={() => setModal(false)} onPublish={handlePublish} />}
+            {preguntasModal && <PreguntasModal actividad_id={preguntasModal.actividad_id} titulo={preguntasModal.titulo} onClose={() => setPreguntasModal(null)} />}
             {resultadosModal && <ResultadosModal actividad_id={resultadosModal.actividad_id} titulo={resultadosModal.titulo} onClose={() => setResultadosModal(null)} />}
             {toast && <Toast msg={toast} />}
         </div>

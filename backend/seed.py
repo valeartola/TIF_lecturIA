@@ -23,7 +23,7 @@ from backend.models import Usuario, Texto, Actividad, Pregunta, Respuesta
 from backend.auth import hashear_password
 
 # --- Datos del docente de prueba (sirve de "marca" para el borrado idempotente) ---
-DOCENTE_EMAIL = "docente@seed.com"
+DOCENTE_EMAIL = "docente@mail.com"
 DOCENTE_PASSWORD = "docente123"
 ALUMNO_PASSWORD = "alumno123"
 CODIGO_CLASE = "TEST-2345"
@@ -92,7 +92,7 @@ def _pregunta(actividad_id: int, dificultad: str, n: int, correcta: int) -> Preg
 def sembrar(session: Session) -> None:
     # --- Docente ---
     docente = Usuario(
-        nombre="Profe Seed",
+        nombre="Profe Mariela",
         email=DOCENTE_EMAIL,
         password_hash=hashear_password(DOCENTE_PASSWORD),
         rol="docente",
