@@ -261,7 +261,6 @@ export default function Estudiante({ user, onLogout }) {
                         return <span style={{ background: cfg.bg, color: cfg.color, fontSize: 11, fontWeight: 800, borderRadius: 20, padding: '3px 10px', whiteSpace: 'nowrap' }}>{cfg.icon} {e}</span>;
                       })()}
                     </div>
-                    <div style={{ fontSize: 13, color: '#888', marginTop: 4, fontWeight: 600 }}>📝 {t.palabras?.toLocaleString()} palabras</div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', padding: '0 24px', color: color, fontSize: 22 }}>→</div>
                 </button>
@@ -353,7 +352,7 @@ export default function Estudiante({ user, onLogout }) {
           </div>
           {answered === 0 && !lastAnswer && (
             <button onClick={handleIrInicio} style={{ background: 'none', border: `1.5px solid ${C.dark}22`, borderRadius: 10, padding: '5px 12px', fontSize: 12, fontWeight: 800, color: '#888', cursor: 'pointer', fontFamily: 'Nunito' }}>
-              ← Inicio
+              Volver
             </button>
           )}
         </div>

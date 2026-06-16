@@ -144,3 +144,10 @@ export const getResumenIA = () => apiFetch('/progreso/resumen-ia');
 /** Progreso de un alumno en una actividad específica */
 export const getProgresoAlumno = (alumnoId, actividadId) =>
     apiFetch(`/progreso/alumno/${alumnoId}/actividad/${actividadId}`);
+/** Editar una pregunta (enunciado, opciones, correcta, tipo, dificultad) */
+export const editarPregunta = (preguntaId, body) =>
+    apiFetch(`/actividades/preguntas/${preguntaId}/editar`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+    });

@@ -3,12 +3,13 @@ from sqlmodel import Session, select
 import logging
 
 from backend.database import get_session
-from backend.models import Actividad, Texto, Usuario, Respuesta
+from backend.models import Actividad, Texto, Usuario, Respuesta, Pregunta
 from backend.auth import solo_docente
 from backend.services.nivel_service import (
     nivel_actual,
     cantidad_preguntas_sesion,
     actividad_completa,
+    intento_actual,
 )
 
 logger = logging.getLogger(__name__)
@@ -28,8 +29,13 @@ def _verificar_actividad_del_docente(actividad_id: int, docente: Usuario, sessio
     return actividad
 
 
+PESOS_INTENTOS = {1: [1.0], 2: [0.75, 0.25], 3: [0.5, 0.3, 0.2]}
+
+
 def _calcular_progreso(alumno: Usuario, actividad_id: int, session: Session) -> dict:
     """Calcula las métricas de un alumno en una actividad. Reutilizado por ambos endpoints."""
+    from backend.services.nivel_service import MAX_INTENTOS
+
     respuestas = session.exec(
         select(Respuesta).where(
             Respuesta.alumno_id == alumno.id,
@@ -40,7 +46,22 @@ def _calcular_progreso(alumno: Usuario, actividad_id: int, session: Session) -> 
     total_respondidas = len(respuestas)
     correctas = sum(1 for r in respuestas if r.es_correcta)
     tope = cantidad_preguntas_sesion(actividad_id, session)
-    porcentaje = round(correctas / total_respondidas * 100, 1) if total_respondidas else 0.0
+    intento = intento_actual(alumno.id, actividad_id, session)
+
+    # Promedio ponderado por intento: 1→100%, 2→75/25%, 3→50/30/20%
+    pcts_por_intento = []
+    for n in range(1, MAX_INTENTOS + 1):
+        resp_n = [r for r in respuestas if r.numero_intento == n]
+        if not resp_n:
+            break
+        correctas_n = sum(1 for r in resp_n if r.es_correcta)
+        pcts_por_intento.append(round(correctas_n / len(resp_n) * 100, 1))
+
+    if pcts_por_intento:
+        pesos = PESOS_INTENTOS[len(pcts_por_intento)]
+        porcentaje_ponderado = round(sum(p * w for p, w in zip(pcts_por_intento, pesos)), 1)
+    else:
+        porcentaje_ponderado = 0.0
 
     return {
         "alumno_id": alumno.id,
@@ -48,9 +69,9 @@ def _calcular_progreso(alumno: Usuario, actividad_id: int, session: Session) -> 
         "respondidas": total_respondidas,
         "tope_preguntas": tope,
         "correctas": correctas,
-        "porcentaje_aciertos": porcentaje,
-        "nivel_alcanzado": nivel_actual(alumno.id, actividad_id, session),
-        "completada": actividad_completa(alumno.id, actividad_id, session),
+        "porcentaje_aciertos": porcentaje_ponderado,
+        "nivel_alcanzado": nivel_actual(alumno.id, actividad_id, intento, session),
+        "completada": actividad_completa(alumno.id, actividad_id, intento, session),
     }
 
 
@@ -71,26 +92,52 @@ def progreso_alumno(
         raise HTTPException(status_code=403, detail="Ese alumno no pertenece a tu clase")
 
     progreso = _calcular_progreso(alumno, actividad_id, session)
+    tope = progreso["tope_preguntas"]
 
-    # Detalle pregunta por pregunta (orden cronológico)
-    respuestas = session.exec(
+    # Todas las respuestas ordenadas cronológicamente
+    todas = session.exec(
         select(Respuesta)
         .where(
             Respuesta.alumno_id == alumno_id,
             Respuesta.actividad_id == actividad_id,
         )
-        .order_by(Respuesta.respondido_en)
+        .order_by(Respuesta.numero_intento, Respuesta.respondido_en)
     ).all()
 
-    progreso["detalle"] = [
-        {
-            "pregunta_id": r.pregunta_id,
-            "opcion_elegida": r.opcion_elegida,
-            "es_correcta": r.es_correcta,
-            "respondido_en": r.respondido_en,
-        }
-        for r in respuestas
-    ]
+    # Agrupar por intento con métricas de cada uno
+    from backend.services.nivel_service import nivel_actual as _nivel_actual, MAX_INTENTOS
+    intentos_data = []
+    for n in range(1, MAX_INTENTOS + 1):
+        resp_intento = [r for r in todas if r.numero_intento == n]
+        if not resp_intento:
+            break
+        correctas_intento = sum(1 for r in resp_intento if r.es_correcta)
+        pct = round(correctas_intento / len(resp_intento) * 100, 1)
+        nivel = _nivel_actual(alumno_id, actividad_id, n, session)
+        completado = len(resp_intento) >= tope
+        intentos_data.append({
+            "numero": n,
+            "respondidas": len(resp_intento),
+            "correctas": correctas_intento,
+            "porcentaje_aciertos": pct,
+            "nivel_alcanzado": nivel,
+            "completado": completado,
+            "respuestas": [
+                {
+                    "pregunta_id": r.pregunta_id,
+                    "opcion_elegida": r.opcion_elegida,
+                    "es_correcta": r.es_correcta,
+                    "respondido_en": r.respondido_en.isoformat() if r.respondido_en else None,
+                    **({
+                        "dificultad": p.dificultad,
+                        "tipo": p.tipo,
+                    } if (p := session.get(Pregunta, r.pregunta_id)) else {}),
+                }
+                for r in resp_intento
+            ],
+        })
+
+    progreso["intentos"] = intentos_data
     return progreso
 
 

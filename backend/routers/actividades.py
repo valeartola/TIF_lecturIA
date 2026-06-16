@@ -215,6 +215,58 @@ def validar_actividad(
     }
 
 
+@router.patch("/preguntas/{pregunta_id}/editar")
+def editar_pregunta(
+    pregunta_id: int,
+    body: dict,
+    session: Session = Depends(get_session),
+    docente: Usuario = Depends(solo_docente)
+):
+    pregunta = session.get(Pregunta, pregunta_id)
+    if not pregunta:
+        raise HTTPException(status_code=404, detail="Pregunta no encontrada")
+
+    # Verificar que la pregunta pertenece a una actividad del docente
+    actividad = session.get(Actividad, pregunta.actividad_id)
+    if not actividad:
+        raise HTTPException(status_code=404, detail="Actividad no encontrada")
+    texto = session.get(Texto, actividad.texto_id)
+    if texto.docente_id != docente.id:
+        raise HTTPException(status_code=403, detail="No tenés permiso para editar esta pregunta")
+
+    # Validar y aplicar cambios
+    if "enunciado" in body:
+        pregunta.enunciado = body["enunciado"].strip()
+    if "opciones" in body:
+        if not isinstance(body["opciones"], list) or len(body["opciones"]) != 4:
+            raise HTTPException(status_code=400, detail="Deben enviarse exactamente 4 opciones")
+        pregunta.opciones_json = json.dumps(body["opciones"], ensure_ascii=False)
+    if "opcion_correcta" in body:
+        if body["opcion_correcta"] not in [0, 1, 2, 3]:
+            raise HTTPException(status_code=400, detail="opcion_correcta debe ser 0, 1, 2 o 3")
+        pregunta.opcion_correcta = body["opcion_correcta"]
+    if "tipo" in body:
+        pregunta.tipo = body["tipo"].strip()
+    if "dificultad" in body:
+        if body["dificultad"] not in ["FÁCIL", "MEDIA", "DIFÍCIL"]:
+            raise HTTPException(status_code=400, detail="dificultad debe ser FÁCIL, MEDIA o DIFÍCIL")
+        pregunta.dificultad = body["dificultad"]
+
+    session.add(pregunta)
+    session.commit()
+    session.refresh(pregunta)
+
+    return {
+        "id": pregunta.id,
+        "enunciado": pregunta.enunciado,
+        "opciones": json.loads(pregunta.opciones_json),
+        "opcion_correcta": pregunta.opcion_correcta,
+        "tipo": pregunta.tipo,
+        "dificultad": pregunta.dificultad,
+        "validada": pregunta.validada,
+    }
+
+
 @router.patch("/preguntas/{pregunta_id}/validar")
 def validar_pregunta(
     pregunta_id: int,
