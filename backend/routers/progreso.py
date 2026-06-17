@@ -50,10 +50,12 @@ def _calcular_progreso(alumno: Usuario, actividad_id: int, session: Session) -> 
 
     # Promedio ponderado por intento: 1→100%, 2→75/25%, 3→50/30/20%
     pcts_por_intento = []
+    ultimo_intento_con_respuestas = None
     for n in range(1, MAX_INTENTOS + 1):
         resp_n = [r for r in respuestas if r.numero_intento == n]
         if not resp_n:
             break
+        ultimo_intento_con_respuestas = n
         correctas_n = sum(1 for r in resp_n if r.es_correcta)
         pcts_por_intento.append(round(correctas_n / len(resp_n) * 100, 1))
 
@@ -63,6 +65,11 @@ def _calcular_progreso(alumno: Usuario, actividad_id: int, session: Session) -> 
     else:
         porcentaje_ponderado = 0.0
 
+    # El nivel a reportar es el del último intento que tiene respuestas.
+    # `intento_actual` puede devolver el intento SIGUIENTE (todavía vacío) una vez
+    # que el anterior se completó, lo que haría caer nivel_actual() en "FÁCIL" por defecto.
+    intento_para_nivel = ultimo_intento_con_respuestas or intento
+
     return {
         "alumno_id": alumno.id,
         "nombre": alumno.nombre,
@@ -70,7 +77,7 @@ def _calcular_progreso(alumno: Usuario, actividad_id: int, session: Session) -> 
         "tope_preguntas": tope,
         "correctas": correctas,
         "porcentaje_aciertos": porcentaje_ponderado,
-        "nivel_alcanzado": nivel_actual(alumno.id, actividad_id, intento, session),
+        "nivel_alcanzado": nivel_actual(alumno.id, actividad_id, intento_para_nivel, session),
         "completada": actividad_completa(alumno.id, actividad_id, intento, session),
     }
 

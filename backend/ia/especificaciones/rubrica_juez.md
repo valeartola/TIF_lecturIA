@@ -73,15 +73,17 @@ Ejemplos de aspectos válidos para un cuento sobre ratoncitos y un gato:
 ## Umbral de aprobación
 
 Una pregunta se considera **aprobada** si todas las dimensiones tienen
-puntaje ≥ 3.
+puntaje ≥ 4.
 
 Si no aprueba, se regenera con el feedback del juez (máximo 2 reintentos por
 pregunta). Si tras los reintentos sigue sin aprobar, se descarta y se pide
 una de reemplazo.
 
-> **Nota metodológica:** este umbral es deliberadamente permisivo en el MVP.
-> Una vez recolectada evidencia de funcionamiento real, se podrá endurecer
-> (ej. exigir D1 y D2 ≥ 4) sin tocar el código.
+> **Nota metodológica:** este umbral se subió de ≥3 a ≥4 en todas las
+> dimensiones tras detectar que el umbral permisivo original dejaba pasar
+> preguntas con opción correcta dudosa o repeticiones entre sí. Con
+> evidencia adicional de funcionamiento real, se podrá seguir ajustando
+> sin tocar el código.
 
 ## Formato de salida del juez
 

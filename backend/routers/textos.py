@@ -36,6 +36,39 @@ def subir_texto(
     return {"id": texto.id, "titulo": texto.titulo, "palabras": len(texto_extraido.split())}
 
 
+@router.delete("/{texto_id}")
+def eliminar_texto(
+    texto_id: int,
+    session: Session = Depends(get_session),
+    docente: Usuario = Depends(solo_docente)
+):
+    """
+    Elimina un texto. Solo permitido si NO tiene ninguna actividad asociada
+    (caso típico: la generación falló antes de crear la Actividad y quedó
+    un Texto huérfano). Si el texto ya tiene una actividad, hay que usar
+    DELETE /actividades/{id} en su lugar, que borra todo en cascada.
+    """
+    texto = session.get(Texto, texto_id)
+    if not texto:
+        raise HTTPException(status_code=404, detail="Texto no encontrado")
+    if texto.docente_id != docente.id:
+        raise HTTPException(status_code=403, detail="No tenés permiso sobre este texto")
+
+    actividad_existente = session.exec(
+        select(Actividad).where(Actividad.texto_id == texto_id)
+    ).first()
+    if actividad_existente:
+        raise HTTPException(
+            status_code=400,
+            detail="Este texto ya tiene una actividad asociada. Eliminá la actividad en su lugar.",
+        )
+
+    session.delete(texto)
+    session.commit()
+
+    return {"mensaje": "Texto eliminado correctamente", "id": texto_id}
+
+
 @router.get("/")
 def listar_textos(
     session: Session = Depends(get_session),

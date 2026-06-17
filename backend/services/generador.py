@@ -11,7 +11,7 @@ import asyncio
 import logging
 import time
 from backend.services.llm_client import LLMClient
-from backend.ia.contexto import construir_prompt_generador
+from backend.ia.contexto import construir_prompt_generador, construir_prompt_generador_lote
 from backend.ia.especificaciones_loader import specs_para_generador
 from backend.domain.actividad import PREGUNTAS_POR_NIVEL, DIFICULTADES
 
@@ -57,31 +57,81 @@ class Generador:
             contenido = self._cliente.llamar(prompt)
             return json.loads(contenido)
 
+    def _extraer_lista(self, contenido: str) -> list:
+        """Parsea el JSON devuelto por el LLM y extrae el array de preguntas.
+
+        Groq con response_format=json_object obliga a que la raíz sea un
+        OBJETO, no un array. Por eso, aunque el prompt pide explícitamente
+        un array, el modelo a veces envuelve el array en una clave (ej.
+        {"preguntas": [...]}, {"resultado": [...]}, {"items": [...]}).
+        Esta función soporta ambos casos: si la raíz ya es una lista, la
+        devuelve tal cual; si es un dict, busca el primer valor que sea
+        una lista y la devuelve.
+        """
+        data = json.loads(contenido)
+        if isinstance(data, list):
+            return data
+        if isinstance(data, dict):
+            for valor in data.values():
+                if isinstance(valor, list):
+                    return valor
+            raise ValueError("El objeto JSON no contiene ninguna lista")
+        raise ValueError(f"Formato inesperado: {type(data).__name__}")
+
+    def _llamar_generador_lote(self, prompt: str, n_esperado: int) -> list[dict]:
+        """Llama al generador pidiendo n_esperado preguntas en una sola
+        respuesta JSON (array, posiblemente envuelto en un objeto).
+        Reintenta una vez si el formato es inválido o si la cantidad de
+        preguntas devueltas no coincide."""
+        contenido = self._cliente.llamar(prompt)
+        try:
+            candidatas = self._extraer_lista(contenido)
+            if len(candidatas) != n_esperado:
+                raise ValueError(
+                    f"Se esperaban {n_esperado} preguntas, llegaron {len(candidatas)}"
+                )
+            return candidatas
+        except (json.JSONDecodeError, ValueError) as e:
+            logger.warning(f"  [generador-lote] formato inválido ({e}), reintentando...")
+            contenido = self._cliente.llamar(prompt)
+            candidatas = self._extraer_lista(contenido)
+            if len(candidatas) != n_esperado:
+                raise ValueError(
+                    f"Tras reintento: se esperaban {n_esperado} preguntas, "
+                    f"llegaron {len(candidatas)}"
+                )
+            return candidatas
+
     def _generar_candidatas(self, texto: str, dificultad: str,
                             tipos: list, posiciones: list,
                             preguntas_aprobadas: list,
                             aspectos_cubiertos: list,
                             feedbacks: dict = None) -> list[dict]:
         """
-        Genera una candidata por slot (tipo + posición) en llamadas paralelas
-        al generador. Cada candidata lleva su tipo y posición para el seguimiento.
+        Genera todas las candidatas de un lote (uno por slot, definido por
+        tipo + posición) en UNA SOLA llamada al generador. Esto reduce el
+        consumo de tokens (texto y specs se envían una vez) y reduce el
+        riesgo de repetición entre preguntas, porque el modelo las escribe
+        todas juntas con visión simultánea del lote completo.
+
         feedbacks: dict {indice_slot: texto_feedback} para reintentos con corrección.
         """
-        candidatas = []
         feedbacks = feedbacks or {}
-        for i, (tipo, pos) in enumerate(zip(tipos, posiciones)):
-            prompt = construir_prompt_generador(
-                texto, dificultad, tipo, pos, preguntas_aprobadas,
-                self._specs,
-                feedback=feedbacks.get(i),
-                aspectos_previos=aspectos_cubiertos
-            )
-            pregunta = self._llamar_generador(prompt)
-            time.sleep(1.5)  # espaciar llamadas a Groq para no agotar el rate limit por minuto
-            pregunta["_slot"] = i
-            pregunta["_tipo"] = tipo
-            pregunta["_pos"] = pos
-            candidatas.append(pregunta)
+
+        prompt = construir_prompt_generador_lote(
+            texto, dificultad, tipos, posiciones,
+            preguntas_aprobadas, self._specs,
+            feedbacks=feedbacks,
+            aspectos_previos=aspectos_cubiertos,
+        )
+
+        candidatas = self._llamar_generador_lote(prompt, len(tipos))
+
+        for i, (candidata, tipo, pos) in enumerate(zip(candidatas, tipos, posiciones)):
+            candidata["_slot"] = i
+            candidata["_tipo"] = tipo
+            candidata["_pos"] = pos
+
         return candidatas
 
     def _generar_por_nivel(self, juez, texto: str, dificultad: str,

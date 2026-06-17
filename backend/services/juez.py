@@ -10,6 +10,7 @@ import logging
 from backend.services.llm_client import LLMClient
 from backend.ia.contexto import construir_prompt_juez, construir_prompt_juez_lote
 from backend.ia.especificaciones_loader import specs_para_juez
+from backend.services.verificador_idioma import verificar_lote
 
 logger = logging.getLogger(__name__)
 
@@ -45,10 +46,8 @@ class Juez:
             raise ValueError("'aspecto_cubierto' debe ser un string no vacío")
 
     def _calcular_aprobada(self, eval_dict: dict) -> bool:
-        dims_permisivas = ["contenido_texto", "respuesta_correcta_unica", "no_repeticion"]
-        if not all(eval_dict[d] >= 3 for d in dims_permisivas):
-            return False
-        return eval_dict["nivel_adecuado"] >= 4
+        dims = ["contenido_texto", "respuesta_correcta_unica", "nivel_adecuado", "no_repeticion"]
+        return all(eval_dict[d] >= 4 for d in dims)
 
     def evaluar(self, texto: str, pregunta: dict, dificultad: str,
                 tipo: str, aspectos_previos: list = None) -> dict:
@@ -79,10 +78,32 @@ class Juez:
         evaluacion["aprobada"] = self._calcular_aprobada(evaluacion)
         return evaluacion
 
+    def _evaluacion_rechazo_mecanico(self, motivo: str) -> dict:
+        """Construye una evaluación sintética de rechazo, sin pasar por el
+        LLM, para preguntas descartadas por el verificador mecánico
+        (ej. idioma). Puntúa todas las dimensiones en 1 para que
+        _calcular_aprobada las rechace sin ambigüedad."""
+        return {
+            "contenido_texto": 1,
+            "respuesta_correcta_unica": 1,
+            "nivel_adecuado": 1,
+            "no_repeticion": 1,
+            "aspecto_cubierto": "descartada por verificación de idioma",
+            "aprobada": False,
+            "comentarios": motivo,
+            "sugerencia_mejora": motivo,
+        }
+
     def evaluar_lote(self, texto: str, preguntas: list[dict], dificultad: str,
                      tipo: str, aspectos_previos: list = None) -> list[dict]:
         """
         Evalúa un lote de preguntas en una sola llamada al LLM.
+
+        Antes de llamar al LLM, pasa el lote por un verificador mecánico
+        (determinístico, sin tokens) que detecta problemas de idioma
+        mezclado. Las preguntas marcadas por ese verificador se rechazan
+        directamente sin gastar la llamada al juez; solo las preguntas
+        limpias se evalúan con el LLM.
 
         Reduce drásticamente el consumo de tokens: las specs y el texto se
         envían una sola vez para todas las preguntas del lote, en lugar de
@@ -102,36 +123,59 @@ class Juez:
         if not preguntas:
             return []
 
-        texto_truncado = texto[:3000] if len(texto) > 3000 else texto
+        # Paso 1: verificación mecánica de idioma (sin tokens).
+        problemas_idioma = verificar_lote(preguntas)
 
-        prompt = construir_prompt_juez_lote(
-            texto_truncado, preguntas, dificultad, tipo,
-            self._specs, aspectos_previos
-        )
+        if problemas_idioma:
+            indices_descartados = sorted(problemas_idioma.keys())
+            logger.info(
+                f"   [verificador-idioma] {len(indices_descartados)} pregunta(s) "
+                f"descartada(s) por idioma mezclado: índices {indices_descartados}"
+            )
 
-        contenido = self._cliente.llamar(prompt)
+        indices_a_evaluar = [i for i in range(len(preguntas)) if i not in problemas_idioma]
+        preguntas_a_evaluar = [preguntas[i] for i in indices_a_evaluar]
 
-        try:
-            evaluaciones = json.loads(contenido)
-            if not isinstance(evaluaciones, list):
-                raise ValueError("El juez no devolvió un array JSON")
-            if len(evaluaciones) != len(preguntas):
-                raise ValueError(
-                    f"El juez devolvió {len(evaluaciones)} evaluaciones "
-                    f"pero se enviaron {len(preguntas)} preguntas"
-                )
-            for ev in evaluaciones:
-                self._validar_evaluacion(ev)
-        except (json.JSONDecodeError, ValueError) as e:
-            logger.warning(f"   [juez-lote] formato inválido ({e}), reintentando...")
+        evaluaciones_llm = []
+        if preguntas_a_evaluar:
+            texto_truncado = texto[:3000] if len(texto) > 3000 else texto
+
+            prompt = construir_prompt_juez_lote(
+                texto_truncado, preguntas_a_evaluar, dificultad, tipo,
+                self._specs, aspectos_previos
+            )
+
             contenido = self._cliente.llamar(prompt)
-            evaluaciones = json.loads(contenido)
-            if not isinstance(evaluaciones, list):
-                raise ValueError("El juez no devolvió un array JSON en el reintento")
-            for ev in evaluaciones:
-                self._validar_evaluacion(ev)
 
-        for ev in evaluaciones:
-            ev["aprobada"] = self._calcular_aprobada(ev)
+            try:
+                evaluaciones_llm = json.loads(contenido)
+                if not isinstance(evaluaciones_llm, list):
+                    raise ValueError("El juez no devolvió un array JSON")
+                if len(evaluaciones_llm) != len(preguntas_a_evaluar):
+                    raise ValueError(
+                        f"El juez devolvió {len(evaluaciones_llm)} evaluaciones "
+                        f"pero se enviaron {len(preguntas_a_evaluar)} preguntas"
+                    )
+                for ev in evaluaciones_llm:
+                    self._validar_evaluacion(ev)
+            except (json.JSONDecodeError, ValueError) as e:
+                logger.warning(f"   [juez-lote] formato inválido ({e}), reintentando...")
+                contenido = self._cliente.llamar(prompt)
+                evaluaciones_llm = json.loads(contenido)
+                if not isinstance(evaluaciones_llm, list):
+                    raise ValueError("El juez no devolvió un array JSON en el reintento")
+                for ev in evaluaciones_llm:
+                    self._validar_evaluacion(ev)
 
-        return evaluaciones
+            for ev in evaluaciones_llm:
+                ev["aprobada"] = self._calcular_aprobada(ev)
+
+        # Paso 2: reensamblar en el orden original, combinando los
+        # rechazos mecánicos con las evaluaciones del LLM.
+        resultado = [None] * len(preguntas)
+        for indice, problema in problemas_idioma.items():
+            resultado[indice] = self._evaluacion_rechazo_mecanico(problema["motivo"])
+        for indice_original, evaluacion in zip(indices_a_evaluar, evaluaciones_llm):
+            resultado[indice_original] = evaluacion
+
+        return resultado

@@ -3,7 +3,7 @@ import { C } from '../constants/colors';
 import {
     listarAlumnos, listarMisActividades, subirTexto,
     generarActividad, validarPregunta, publicarActividad,
-    getResumenIA, crearAlumno, getResumenGrupal, eliminarActividad, getActividad, getProgresoAlumno, editarPregunta,
+    getResumenIA, crearAlumno, getResumenGrupal, eliminarActividad, getActividad, getProgresoAlumno, editarPregunta, generarMasPreguntas, eliminarTexto,
 } from '../api';
 
 // ── Colores de actividades ────────────────────────────────────
@@ -57,6 +57,19 @@ function Sidebar({ active, onNav, collapsed, user, onLogout }) {
             </div>
 
             <nav style={{ flex: 1, padding: '8px 0' }}>
+                {!collapsed && (
+                    <div onClick={onLogout} title="Cerrar sesión" style={{ padding: '6px 20px 16px', cursor: 'pointer', marginBottom: 8, borderBottom: '1px solid rgba(0,0,0,0.08)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <div style={{ width: 36, height: 36, borderRadius: '50%', background: C.yellow, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: 15, color: C.dark, flexShrink: 0 }}>
+                                {user?.nombre?.[0]?.toUpperCase() || 'D'}
+                            </div>
+                            <div>
+                                <div style={{ fontSize: 13, fontWeight: 800, color: t.text }}>{user?.nombre || 'Docente'}</div>
+                                <div style={{ fontSize: 11, color: t.subtext }}>Código: {user?.codigo_clase || '—'}</div>
+                            </div>
+                        </div>
+                    </div>
+                )}
                 {NAV.map((item) => {
                     const isActive = active === item.id;
                     return (
@@ -67,20 +80,6 @@ function Sidebar({ active, onNav, collapsed, user, onLogout }) {
                     );
                 })}
             </nav>
-
-            {!collapsed && (
-                <div onClick={onLogout} title="Cerrar sesión" style={{ padding: '16px 20px', cursor: 'pointer', borderTop: '1px solid rgba(0,0,0,0.08)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <div style={{ width: 36, height: 36, borderRadius: '50%', background: C.yellow, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: 15, color: C.dark, flexShrink: 0 }}>
-                            {user?.nombre?.[0]?.toUpperCase() || 'D'}
-                        </div>
-                        <div>
-                            <div style={{ fontSize: 13, fontWeight: 800, color: t.text }}>{user?.nombre || 'Docente'}</div>
-                            <div style={{ fontSize: 11, color: t.subtext }}>Código: {user?.codigo_clase || '—'}</div>
-                        </div>
-                    </div>
-                </div>
-            )}
         </div>
     );
 }
@@ -95,32 +94,6 @@ function StatCard({ label, value, sub, color, icon }) {
             <div style={{ fontSize: 28, fontWeight: 900, color: '#fff', lineHeight: 1 }}>{value}</div>
             <div style={{ fontSize: 13, fontWeight: 700, color: 'rgba(255,255,255,0.85)', marginTop: 5 }}>{label}</div>
             {sub && <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.65)', marginTop: 3 }}>{sub}</div>}
-        </div>
-    );
-}
-
-function BarChart() {
-    const max = Math.max(...CHART_DATA.map((d) => d.pct));
-    const H = 120;
-    return (
-        <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', height: H + 40, padding: '0 4px' }}>
-            {CHART_DATA.map((d, i) => (
-                <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-                    <div style={{ fontSize: 12, fontWeight: 800, color: THEME.chartBar }}>{d.pct}%</div>
-                    <div style={{ width: '100%', height: H, display: 'flex', alignItems: 'flex-end', background: 'rgba(0,0,0,0.04)', borderRadius: 8, overflow: 'hidden' }}>
-                        <div style={{ width: '100%', height: `${d.pct / 100 * H}px`, background: THEME.chartBar, borderRadius: '6px 6px 0 0', transition: 'height 0.8s', opacity: 0.75 + d.pct / max * 0.25 }} />
-                    </div>
-                    <div style={{ fontSize: 10, color: THEME.subtext, textAlign: 'center', lineHeight: 1.2, whiteSpace: 'pre', fontWeight: 600 }}>{d.name}</div>
-                </div>
-            ))}
-        </div>
-    );
-}
-
-function ProgressBar({ pct, color }) {
-    return (
-        <div style={{ height: 8, borderRadius: 8, background: 'rgba(0,0,0,0.07)', overflow: 'hidden', width: '100%' }}>
-            <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: 8, transition: 'width 1s' }} />
         </div>
     );
 }
@@ -156,23 +129,25 @@ function ProgresoContent({ students, loadingStudents, resumen, loadingResumen, p
     });
 
     // Métricas para los 4 stat cards
-    const sinActividad = alumnosConStats.filter(a => a.activas === 0).length;
     const necesitanAtencion = alumnosConStats.filter(a => a.promedio !== null && a.promedio < 50).length;
 
-    // Distribución de niveles (para el gráfico)
-    const nivelDist = { 'FÁCIL': 0, 'MEDIA': 0, 'DIFÍCIL': 0 };
-    alumnosConStats.forEach(a => { if (a.nivel && nivelDist[a.nivel] !== undefined) nivelDist[a.nivel]++; });
-    const nivelData = [
-        { label: 'Básico', key: 'FÁCIL', color: C.red, bg: '#FEECEC' },
-        { label: 'Intermedio', key: 'MEDIA', color: C.yellow, bg: '#FFF8E1' },
-        { label: 'Avanzado', key: 'DIFÍCIL', color: C.green, bg: '#E8F5EB' },
+    // Distribución de promedios por franja (reemplaza la distribución de niveles, que dependía
+    // de un nivel que solo tiene sentido dentro de un intento puntual, no como estado global del alumno)
+    const franjas = [
+        { label: '< 50%', key: 'baja', color: C.red, bg: '#FEECEC', test: (p) => p < 50 },
+        { label: '50-70%', key: 'media', color: C.yellow, bg: '#FFF8E1', test: (p) => p >= 50 && p < 70 },
+        { label: '> 70%', key: 'alta', color: C.green, bg: '#E8F5EB', test: (p) => p >= 70 },
     ];
+    const franjasData = franjas.map(f => ({
+        ...f,
+        cant: alumnosConStats.filter(a => a.promedio !== null && f.test(a.promedio)).length,
+    }));
+    const maxFranja = Math.max(...franjasData.map(f => f.cant), 1);
 
-    const maxNivel = Math.max(...nivelData.map(n => nivelDist[n.key]), 1);
+    // Promedio por actividad (ya viene calculado del backend en cada actividad)
+    const maxPromActividad = Math.max(...progresoActs.map(a => a.promedio_aciertos_clase), 1);
     const H = 100;
 
-    // Nivel predominante de la clase
-    const nivelPred = nivelData.reduce((prev, curr) => nivelDist[curr.key] > nivelDist[prev.key] ? curr : prev, nivelData[0]);
 
     return (
         <>
@@ -194,17 +169,8 @@ function ProgresoContent({ students, loadingStudents, resumen, loadingResumen, p
                 </div>
             </div>
 
-            {/* ── 4 Stat Cards ── */}
+            {/* ── 4 Stat Cards, ordenadas por urgencia ── */}
             <div style={{ display: 'flex', gap: 14, marginBottom: 24 }}>
-                <StatCard label="Total de estudiantes" value={totalAlumnos} sub="Registrados en la clase" icon="🧒" color={C.blue} />
-                <StatCard label="Actividades publicadas" value={progresoActs.length} sub="Con al menos un alumno" icon="📖" color={C.green} />
-                <StatCard
-                    label="Promedio global"
-                    value={promedioGlobal !== null ? `${promedioGlobal}%` : '—'}
-                    sub="Promedio entre actividades"
-                    icon="⭐"
-                    color={C.yellow}
-                />
                 <StatCard
                     label="Necesitan atención"
                     value={necesitanAtencion}
@@ -212,33 +178,41 @@ function ProgresoContent({ students, loadingStudents, resumen, loadingResumen, p
                     icon={necesitanAtencion > 0 ? '⚠️' : '✅'}
                     color={necesitanAtencion > 0 ? C.red : C.pink}
                 />
+                <StatCard
+                    label="Promedio global"
+                    value={promedioGlobal !== null ? `${promedioGlobal}%` : '—'}
+                    sub="Promedio entre actividades"
+                    icon="⭐"
+                    color={C.yellow}
+                />
+                <StatCard label="Total de estudiantes" value={totalAlumnos} sub="Registrados en la clase" icon="🧒" color={C.blue} />
+                <StatCard label="Actividades publicadas" value={progresoActs.length} sub="Con al menos un alumno" icon="📖" color={C.green} />
             </div>
 
-            {/* ── Gráfico de niveles + Resumen participación ── */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr', gap: 20, marginBottom: 24 }}>
+            {/* ── Promedio por actividad + Distribución de promedios por alumno ── */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 24 }}>
 
-                {/* Gráfico de distribución de niveles */}
+                {/* Promedio de aciertos por actividad */}
                 <div style={{ background: card.bg, borderRadius: card.radius, boxShadow: card.shadow, padding: '22px 24px' }}>
-                    <h2 style={{ fontSize: 15, fontWeight: 800, color: THEME.heading, marginBottom: 2 }}>Distribución de niveles</h2>
-                    <p style={{ fontSize: 12, color: THEME.subtext, marginBottom: 20 }}>
-                        {loadingProgreso ? 'Cargando…' : `¿En qué nivel está cada alumno? · ${alumnosConStats.filter(a => a.nivel).length} con actividad`}
-                    </p>
+                    <h2 style={{ fontSize: 15, fontWeight: 800, color: THEME.heading, marginBottom: 2 }}>Promedio por actividad</h2>
+                    <p style={{ fontSize: 12, color: THEME.subtext, marginBottom: 20 }}>¿Qué actividad les resultó más difícil?</p>
                     {loadingProgreso
                         ? <div style={{ height: H + 40, display: 'flex', alignItems: 'center', justifyContent: 'center', color: THEME.subtext, fontSize: 13 }}>Cargando datos…</div>
-                        : !alumnosConStats.some(a => a.nivel)
-                            ? <div style={{ height: H + 40, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#bbb', fontSize: 13 }}>Sin datos aún</div>
+                        : progresoActs.length === 0
+                            ? <div style={{ height: H + 40, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#bbb', fontSize: 13 }}>Sin actividades publicadas aún</div>
                             : (
-                                <div style={{ display: 'flex', gap: 16, alignItems: 'flex-end', height: H + 40 }}>
-                                    {nivelData.map((n) => {
-                                        const cant = nivelDist[n.key];
-                                        const barH = cant === 0 ? 4 : Math.max(16, (cant / maxNivel) * H);
+                                <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', height: H + 40 }}>
+                                    {progresoActs.map((act) => {
+                                        const pct = Math.round(act.promedio_aciertos_clase);
+                                        const barH = pct === 0 ? 4 : Math.max(16, (pct / maxPromActividad) * H);
+                                        const color = pct >= 70 ? C.green : pct >= 50 ? C.yellow : C.red;
                                         return (
-                                            <div key={n.key} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-                                                <div style={{ fontSize: 13, fontWeight: 900, color: n.color }}>{cant}</div>
-                                                <div style={{ width: '100%', height: H, display: 'flex', alignItems: 'flex-end', background: 'rgba(0,0,0,0.04)', borderRadius: 10, overflow: 'hidden' }}>
-                                                    <div style={{ width: '100%', height: barH, background: n.color, borderRadius: '8px 8px 0 0', transition: 'height 0.8s', opacity: 0.85 }} />
+                                            <div key={act.actividad_id} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                                                <div style={{ fontSize: 12, fontWeight: 900, color }}>{pct}%</div>
+                                                <div style={{ width: '100%', height: H, display: 'flex', alignItems: 'flex-end', background: 'rgba(0,0,0,0.04)', borderRadius: 8, overflow: 'hidden' }}>
+                                                    <div style={{ width: '100%', height: barH, background: color, borderRadius: '6px 6px 0 0', transition: 'height 0.8s', opacity: 0.85 }} />
                                                 </div>
-                                                <div style={{ fontSize: 12, fontWeight: 800, padding: '3px 10px', borderRadius: 20, background: n.bg, color: n.color }}>{n.label}</div>
+                                                <div style={{ fontSize: 10.5, color: THEME.subtext, textAlign: 'center', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', width: '100%' }} title={act.titulo}>{act.titulo}</div>
                                             </div>
                                         );
                                     })}
@@ -247,46 +221,31 @@ function ProgresoContent({ students, loadingStudents, resumen, loadingResumen, p
                     }
                 </div>
 
-                {/* Resumen de participación */}
+                {/* Distribución de promedios por franja */}
                 <div style={{ background: card.bg, borderRadius: card.radius, boxShadow: card.shadow, padding: '22px 24px' }}>
-                    <h2 style={{ fontSize: 15, fontWeight: 800, color: THEME.heading, marginBottom: 2 }}>Participación</h2>
-                    <p style={{ fontSize: 12, color: THEME.subtext, marginBottom: 20 }}>{totalAlumnos} alumnos · {progresoActs.length} actividades</p>
-
-                    {/* Bloque participación */}
-                    <div style={{ fontSize: 11, fontWeight: 800, color: THEME.subtext, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10 }}>Actividad</div>
-                    {[
-                        { label: 'Activos', value: alumnosConStats.filter(a => a.activas > 0).length, color: C.green },
-                        { label: 'Sin actividad aún', value: sinActividad, color: sinActividad > 0 ? C.red : C.gray },
-                    ].map(({ label, value, color }) => (
-                        <div key={label} style={{ marginBottom: 14 }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
-                                <span style={{ fontSize: 13, fontWeight: 700, color: THEME.heading }}>{label}</span>
-                                <span style={{ fontSize: 13, fontWeight: 900, color }}>{value}</span>
-                            </div>
-                            <div style={{ height: 7, borderRadius: 8, background: 'rgba(0,0,0,0.07)', overflow: 'hidden' }}>
-                                <div style={{ height: '100%', width: `${totalAlumnos > 0 ? (value / totalAlumnos) * 100 : 0}%`, background: color, borderRadius: 8, transition: 'width 0.8s' }} />
-                            </div>
-                        </div>
-                    ))}
-
-                    <div style={{ height: 1, background: 'rgba(0,0,0,0.06)', margin: '16px 0' }} />
-
-                    {/* Bloque rendimiento */}
-                    <div style={{ fontSize: 11, fontWeight: 800, color: THEME.subtext, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10 }}>Rendimiento</div>
-                    {[
-                        { label: 'Promedio ≥ 70%', value: alumnosConStats.filter(a => a.promedio !== null && a.promedio >= 70).length, color: C.green },
-                        { label: 'Necesitan atención', value: necesitanAtencion, color: necesitanAtencion > 0 ? C.red : C.gray },
-                    ].map(({ label, value, color }) => (
-                        <div key={label} style={{ marginBottom: 14 }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
-                                <span style={{ fontSize: 13, fontWeight: 700, color: THEME.heading }}>{label}</span>
-                                <span style={{ fontSize: 13, fontWeight: 900, color }}>{value}</span>
-                            </div>
-                            <div style={{ height: 7, borderRadius: 8, background: 'rgba(0,0,0,0.07)', overflow: 'hidden' }}>
-                                <div style={{ height: '100%', width: `${totalAlumnos > 0 ? (value / totalAlumnos) * 100 : 0}%`, background: color, borderRadius: 8, transition: 'width 0.8s' }} />
-                            </div>
-                        </div>
-                    ))}
+                    <h2 style={{ fontSize: 15, fontWeight: 800, color: THEME.heading, marginBottom: 2 }}>Distribución de promedios</h2>
+                    <p style={{ fontSize: 12, color: THEME.subtext, marginBottom: 20 }}>¿Cuántos alumnos están en cada franja?</p>
+                    {loadingProgreso
+                        ? <div style={{ height: H + 40, display: 'flex', alignItems: 'center', justifyContent: 'center', color: THEME.subtext, fontSize: 13 }}>Cargando datos…</div>
+                        : !alumnosConStats.some(a => a.promedio !== null)
+                            ? <div style={{ height: H + 40, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#bbb', fontSize: 13 }}>Sin datos aún</div>
+                            : (
+                                <div style={{ display: 'flex', gap: 16, alignItems: 'flex-end', height: H + 40 }}>
+                                    {franjasData.map((f) => {
+                                        const barH = f.cant === 0 ? 4 : Math.max(16, (f.cant / maxFranja) * H);
+                                        return (
+                                            <div key={f.key} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                                                <div style={{ fontSize: 13, fontWeight: 900, color: f.color }}>{f.cant}</div>
+                                                <div style={{ width: '100%', height: H, display: 'flex', alignItems: 'flex-end', background: 'rgba(0,0,0,0.04)', borderRadius: 10, overflow: 'hidden' }}>
+                                                    <div style={{ width: '100%', height: barH, background: f.color, borderRadius: '8px 8px 0 0', transition: 'height 0.8s', opacity: 0.85 }} />
+                                                </div>
+                                                <div style={{ fontSize: 12, fontWeight: 800, padding: '3px 10px', borderRadius: 20, background: f.bg, color: f.color }}>{f.label}</div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )
+                    }
                 </div>
             </div>
 
@@ -311,7 +270,6 @@ function ProgresoContent({ students, loadingStudents, resumen, loadingResumen, p
                                     const sinAct = s.promedio === null;
                                     const alert = !sinAct && s.promedio < 50;
                                     const color = sinAct ? THEME.subtext : s.promedio >= 70 ? C.green : s.promedio >= 50 ? C.yellow : C.red;
-                                    const nivelStr = s.nivel ? nivelLabel(s.nivel) : null;
 
                                     return (
                                         <div key={s.id} style={{
@@ -627,7 +585,6 @@ function MiClaseContent({ students, loadingStudents, codigoClase, onAlumnoCreado
                     <div style={{ padding: '40px', textAlign: 'center', color: THEME.subtext }}>Cargando alumnos…</div>
                 ) : students.length === 0 ? (
                     <div style={{ padding: '48px 32px', textAlign: 'center' }}>
-                        <div style={{ fontSize: 48, marginBottom: 12 }}>🧒</div>
                         <p style={{ fontSize: 15, fontWeight: 700, color: THEME.subtext }}>Todavía no hay alumnos en tu clase.</p>
                         <p style={{ fontSize: 13, color: '#aaa', marginTop: 4 }}>Creá el primero con el botón de arriba o compartí el código de clase.</p>
                     </div>
@@ -660,8 +617,9 @@ const fieldStyle = { padding: '10px 14px', borderRadius: 10, border: '1.5px soli
 
 // ══════════════════════════════════════════════════════════════
 // ══════════════════════════════════════════════════════════════
-function ActivityCard({ act, color, onVerPreguntas, onVerResultados, onEliminar }) {
+function ActivityCard({ act, color, onVerPreguntas, onVerResultados, onEliminar, onRetomar, onGenerarDesdeTexto, onEliminarTexto }) {
     const fecha = act.creado_en ? new Date(act.creado_en).toLocaleDateString('es-AR', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+    const sinActividad = !act.actividad_id; // la generación nunca llegó a crear una Actividad
     return (
         <div style={{ background: '#fff', borderRadius: 18, boxShadow: '0 2px 14px rgba(0,0,0,0.07)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
             <div style={{ background: color, padding: '18px 20px', display: 'flex', alignItems: 'center', gap: 14, position: 'relative', overflow: 'hidden' }}>
@@ -672,8 +630,8 @@ function ActivityCard({ act, color, onVerPreguntas, onVerResultados, onEliminar 
             </div>
             <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12, flex: 1 }}>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <span style={{ background: act.validada ? '#E8F5EB' : '#FFF8E1', color: act.validada ? C.green : C.yellow, fontSize: 11.5, fontWeight: 800, borderRadius: 20, padding: '3px 11px' }}>
-                        {act.validada ? '✓ Publicada' : '⏳ Borrador'}
+                    <span style={{ background: act.validada ? '#E8F5EB' : sinActividad ? '#FEECEC' : '#FFF8E1', color: act.validada ? C.green : sinActividad ? C.red : C.yellow, fontSize: 11.5, fontWeight: 800, borderRadius: 20, padding: '3px 11px' }}>
+                        {act.validada ? '✓ Publicada' : sinActividad ? '⚠️ Sin generar' : '⏳ Borrador'}
                     </span>
                     <span style={{ background: 'rgba(0,0,0,0.05)', color: '#666', fontSize: 11.5, fontWeight: 800, borderRadius: 20, padding: '3px 11px' }}>
                         {act.palabras?.toLocaleString()} palabras
@@ -682,9 +640,17 @@ function ActivityCard({ act, color, onVerPreguntas, onVerResultados, onEliminar 
                 <div style={{ display: 'flex', gap: 8, marginTop: 'auto' }}>
                     {act.validada && act.actividad_id && <button onClick={() => onVerPreguntas(act.actividad_id, act.titulo)} style={{ background: 'transparent', border: `1.5px solid ${C.blue}44`, borderRadius: 10, padding: '7px 12px', fontSize: 12, fontWeight: 800, color: C.blue, cursor: 'pointer', fontFamily: 'Nunito' }}>Ver preguntas</button>}
                     {act.validada && act.actividad_id && <button onClick={() => onVerResultados(act.actividad_id, act.titulo)} style={{ flex: 1, background: C.blue, border: 'none', borderRadius: 10, padding: '7px 14px', fontSize: 12, fontWeight: 800, color: '#fff', cursor: 'pointer', fontFamily: 'Nunito' }}>Ver resultados</button>}
-                    {!act.validada && act.actividad_id && <button style={{ flex: 1, background: C.green, border: 'none', borderRadius: 10, padding: '7px 14px', fontSize: 12, fontWeight: 800, color: '#fff', cursor: 'pointer', fontFamily: 'Nunito' }}>Publicar</button>}
-                    {act.actividad_id && (
+                    {!act.validada && act.actividad_id && (
+                        <button onClick={() => onRetomar(act.actividad_id, act.titulo)} style={{ flex: 1, background: C.green, border: 'none', borderRadius: 10, padding: '7px 14px', fontSize: 12, fontWeight: 800, color: '#fff', cursor: 'pointer', fontFamily: 'Nunito' }}>📝 Retomar</button>
+                    )}
+                    {act.validada && act.actividad_id && (
                         <button onClick={() => onEliminar(act.actividad_id)} style={{ background: 'transparent', border: `2px solid #ff4d4f44`, borderRadius: 10, padding: '7px 10px', fontSize: 14, cursor: 'pointer', color: '#ff4d4f', lineHeight: 1 }} title="Eliminar actividad">🗑</button>
+                    )}
+                    {sinActividad && (
+                        <>
+                            <button onClick={() => onGenerarDesdeTexto(act.texto_id, act.titulo)} style={{ flex: 1, background: C.blue, border: 'none', borderRadius: 10, padding: '7px 14px', fontSize: 12, fontWeight: 800, color: '#fff', cursor: 'pointer', fontFamily: 'Nunito' }}>✨ Generar preguntas</button>
+                            <button onClick={() => onEliminarTexto(act.texto_id)} style={{ background: 'transparent', border: `2px solid #ff4d4f44`, borderRadius: 10, padding: '7px 10px', fontSize: 14, cursor: 'pointer', color: '#ff4d4f', lineHeight: 1 }} title="Eliminar texto">🗑</button>
+                        </>
                     )}
                 </div>
             </div>
@@ -709,20 +675,82 @@ function NewActivityCard({ onClick }) {
 // ══════════════════════════════════════════════════════════════
 // MODAL DE CREACIÓN — conectado a la API real
 // ══════════════════════════════════════════════════════════════
-function CreateModal({ onClose, onPublish }) {
-    const [step, setStep] = useState(1);
+function CreateModal({ onClose, onPublish, onEliminar, actividadExistente, textoExistente }) {
+    const esRetomar = !!actividadExistente;
+    const esDesdeTexto = !!textoExistente; // texto ya subido, sin Actividad creada (la generación previa falló)
+    const [step, setStep] = useState(esRetomar ? 4 : esDesdeTexto ? 3 : 1);
     const [file, setFile] = useState(null);
     const [editandoIdx, setEditandoIdx] = useState(null); // índice de la pregunta que se está editando
     const [editForm, setEditForm] = useState(null);       // copia local del form de edición
     const [savingEdit, setSavingEdit] = useState(false);
     const [fileName, setFileName] = useState('');
     const [dragOver, setDragOver] = useState(false);
-    const [title, setTitle] = useState('');
-    const [textoId, setTextoId] = useState(null);
-    const [actividadId, setActividadId] = useState(null);
+    const [title, setTitle] = useState(actividadExistente?.titulo || textoExistente?.titulo || '');
+    const [textoId, setTextoId] = useState(textoExistente?.texto_id || null);
+    const [actividadId, setActividadId] = useState(actividadExistente?.actividad_id || null);
     const [questions, setQuestions] = useState([]);
     const [apiError, setApiError] = useState('');
+    const [loadingExistente, setLoadingExistente] = useState(esRetomar);
+    const [generandoMas, setGenerandoMas] = useState(false);
     const inputRef = useRef(null);
+
+    // Si estamos retomando un borrador, cargar sus preguntas reales
+    useEffect(() => {
+        if (!esRetomar) return;
+        getActividad(actividadExistente.actividad_id)
+            .then(actData => {
+                const allQ = Object.entries(actData.preguntas_por_nivel).flatMap(([nivel, pregs]) =>
+                    pregs.map((p) => ({
+                        id: p.id,
+                        pregunta: p.enunciado,
+                        opciones: p.opciones,
+                        correcta: p.opcion_correcta,
+                        tipo: p.tipo,
+                        nivel,
+                        aprobada: !!p.validada,
+                    }))
+                );
+                setQuestions(allQ);
+            })
+            .catch(err => setApiError(err.message || 'No se pudieron cargar las preguntas de esta actividad'))
+            .finally(() => setLoadingExistente(false));
+    }, [esRetomar]);
+
+    // Si estamos generando desde un texto ya subido (sin Actividad previa), arrancar directo
+    useEffect(() => {
+        if (!esDesdeTexto) return;
+        setApiError('');
+        generarActividad(textoExistente.texto_id)
+            .then(actData => {
+                setActividadId(actData.id);
+                const allQ = Object.entries(actData.preguntas_por_nivel).flatMap(([nivel, pregs]) =>
+                    pregs.map((p) => ({ ...p, nivel, aprobada: false }))
+                );
+                setQuestions(allQ);
+                setStep(4);
+            })
+            .catch(err => {
+                setApiError(err.message || 'Error al generar la actividad');
+                setStep(4); // quedarse en una vista donde se vea el error, en vez de trabar en "generando"
+            });
+    }, [esDesdeTexto]);
+
+    // Generar más preguntas sobre la actividad existente (no crea una nueva)
+    const handleGenerarMas = async () => {
+        setApiError('');
+        setGenerandoMas(true);
+        try {
+            const actData = await generarMasPreguntas(actividadId);
+            const nuevasQ = Object.entries(actData.preguntas_por_nivel).flatMap(([nivel, pregs]) =>
+                pregs.map((p) => ({ ...p, nivel, aprobada: false }))
+            );
+            setQuestions(prev => [...prev, ...nuevasQ]);
+        } catch (err) {
+            setApiError(err.message || 'No se pudieron generar más preguntas');
+        } finally {
+            setGenerandoMas(false);
+        }
+    };
 
     const pickFile = (f) => {
         if (!f) return;
@@ -781,26 +809,29 @@ function CreateModal({ onClose, onPublish }) {
 
                 {/* Header */}
                 <div style={{ background: C.blue, padding: '20px 26px', display: 'flex', alignItems: 'center', gap: 14, flexShrink: 0 }}>
-                    <div style={{ width: 42, height: 42, borderRadius: 12, background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>✨</div>
+                    <div style={{ width: 42, height: 42, borderRadius: 12, background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>{esRetomar ? '📝' : '✨'}</div>
                     <div style={{ flex: 1 }}>
-                        <h2 style={{ fontSize: 18, fontWeight: 900, color: '#fff' }}>Crear actividad con IA</h2>
+                        <h2 style={{ fontSize: 18, fontWeight: 900, color: '#fff' }}>{esRetomar ? 'Retomar actividad' : 'Crear actividad con IA'}</h2>
                         <p style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.8)', fontWeight: 600 }}>
-                            {step === 1 && 'Paso 1 de 3 — Subí el texto'}
-                            {step === 2 && 'Paso 2 de 3 — Configurá la actividad'}
-                            {step === 3 && 'Generando preguntas con IA…'}
-                            {step === 4 && 'Paso 3 de 3 — Revisá y publicá'}
+                            {esRetomar && (loadingExistente ? 'Cargando preguntas…' : `${title}`)}
+                            {!esRetomar && step === 1 && 'Paso 1 de 3 — Subí el texto'}
+                            {!esRetomar && step === 2 && 'Paso 2 de 3 — Configurá la actividad'}
+                            {!esRetomar && step === 3 && 'Generando preguntas con IA…'}
+                            {!esRetomar && step === 4 && 'Paso 3 de 3 — Revisá y publicá'}
                         </p>
                     </div>
                     <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.18)', border: 'none', borderRadius: 10, width: 34, height: 34, cursor: 'pointer', color: '#fff', fontSize: 18, fontWeight: 900 }}>×</button>
                 </div>
 
-                {/* Barra de progreso */}
-                <div style={{ display: 'flex', gap: 6, padding: '14px 26px 0', flexShrink: 0 }}>
-                    {[1, 2, 3].map((n) => {
-                        const reached = n === 1 || (n === 2 && step >= 2) || (n === 3 && step >= 3);
-                        return <div key={n} style={{ flex: 1, height: 5, borderRadius: 4, background: reached ? C.green : 'rgba(0,0,0,0.08)', transition: 'background 0.3s' }} />;
-                    })}
-                </div>
+                {/* Barra de progreso (solo flujo de creación nueva desde cero) */}
+                {!esRetomar && !esDesdeTexto && (
+                    <div style={{ display: 'flex', gap: 6, padding: '14px 26px 0', flexShrink: 0 }}>
+                        {[1, 2, 3].map((n) => {
+                            const reached = n === 1 || (n === 2 && step >= 2) || (n === 3 && step >= 3);
+                            return <div key={n} style={{ flex: 1, height: 5, borderRadius: 4, background: reached ? C.green : 'rgba(0,0,0,0.08)', transition: 'background 0.3s' }} />;
+                        })}
+                    </div>
+                )}
 
                 {/* Body */}
                 <div style={{ padding: '24px 26px', overflowY: 'auto', flex: 1 }}>
@@ -874,153 +905,172 @@ function CreateModal({ onClose, onPublish }) {
                     {/* Paso 4 — Revisión */}
                     {step === 4 && (
                         <div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 12, background: C.green + '12', border: `1.5px solid ${C.green}`, borderRadius: 12, padding: '12px 16px', marginBottom: 18 }}>
-                                <span style={{ fontSize: 24 }}>🎉</span>
-                                <div>
-                                    <p style={{ fontSize: 13.5, fontWeight: 800, color: C.dark }}>¡Se generaron {questions.length} preguntas! Revisá, editá y aprobá las que querés publicar.</p>
-                                    <p style={{ fontSize: 12, color: THEME.subtext, marginTop: 2 }}>Se necesitan al menos 2 aprobadas por nivel (Fácil / Media / Difícil) para publicar.</p>
+                            {esRetomar && loadingExistente && (
+                                <div style={{ padding: '32px 0', textAlign: 'center', color: THEME.subtext }}>Cargando preguntas de esta actividad…</div>
+                            )}
+                            {(!esRetomar || !loadingExistente) && !apiError && (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 12, background: C.green + '12', border: `1.5px solid ${C.green}`, borderRadius: 12, padding: '12px 16px', marginBottom: 18 }}>
+                                    <span style={{ fontSize: 24 }}>{esRetomar ? '📝' : '🎉'}</span>
+                                    <div>
+                                        <p style={{ fontSize: 13.5, fontWeight: 800, color: C.dark }}>
+                                            {esRetomar
+                                                ? `Esta actividad tiene ${questions.length} pregunta${questions.length === 1 ? '' : 's'} generada${questions.length === 1 ? '' : 's'}. Revisá, editá, aprobá o generá más.`
+                                                : `¡Se generaron ${questions.length} preguntas! Revisá, editá y aprobá las que querés publicar.`}
+                                        </p>
+                                        <p style={{ fontSize: 12, color: THEME.subtext, marginTop: 2 }}>Se necesitan al menos 2 aprobadas por nivel (Fácil / Media / Difícil) para publicar.</p>
+                                    </div>
                                 </div>
-                            </div>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                                {questions.map((q, i) => {
-                                    const isEditing = editandoIdx === i;
-                                    return (
-                                        <div key={i} style={{ border: `2px solid ${isEditing ? C.blue : q.aprobada ? C.green : 'rgba(0,0,0,0.08)'}`, borderRadius: 14, padding: '14px 16px', background: isEditing ? C.blueLight : q.aprobada ? C.green + '08' : '#fff', transition: 'all 0.15s' }}>
+                            )}
+                            {(!esRetomar || !loadingExistente) && (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                                    {questions.map((q, i) => {
+                                        const isEditing = editandoIdx === i;
+                                        return (
+                                            <div key={i} style={{ border: `2px solid ${isEditing ? C.blue : q.aprobada ? C.green : 'rgba(0,0,0,0.08)'}`, borderRadius: 14, padding: '14px 16px', background: isEditing ? C.blueLight : q.aprobada ? C.green + '08' : '#fff', transition: 'all 0.15s' }}>
 
-                                            {/* Vista normal */}
-                                            {!isEditing && (
-                                                <>
-                                                    <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: 10 }}>
-                                                        <span style={{ width: 26, height: 26, borderRadius: 8, background: C.blue, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 900, flexShrink: 0 }}>{i + 1}</span>
-                                                        <div style={{ flex: 1 }}>
-                                                            <div style={{ fontSize: 11, fontWeight: 700, color: THEME.subtext, marginBottom: 4 }}>{q.nivel} · {q.tipo}</div>
-                                                            <p style={{ fontSize: 14, fontWeight: 700, color: C.dark, margin: 0 }}>{q.pregunta}</p>
-                                                        </div>
-                                                        <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                                                            <button
-                                                                onClick={() => { setEditandoIdx(i); setEditForm({ enunciado: q.pregunta, opciones: [...q.opciones], opcion_correcta: q.correcta, tipo: q.tipo, dificultad: q.nivel }); }}
-                                                                style={{ background: 'rgba(0,0,0,0.06)', color: '#666', border: 'none', borderRadius: 10, padding: '6px 12px', fontSize: 12, fontWeight: 800, cursor: 'pointer', fontFamily: 'Nunito' }}>
-                                                                ✏️ Editar
-                                                            </button>
-                                                            <button onClick={() => toggleAprobada(i)} style={{ background: q.aprobada ? C.green : 'rgba(0,0,0,0.06)', color: q.aprobada ? '#fff' : '#888', border: 'none', borderRadius: 10, padding: '6px 14px', fontSize: 12, fontWeight: 800, cursor: 'pointer', fontFamily: 'Nunito', whiteSpace: 'nowrap' }}>
-                                                                {q.aprobada ? '✓ Aprobada' : 'Aprobar'}
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, paddingLeft: 36 }}>
-                                                        {q.opciones.map((opt, oi) => (
-                                                            <div key={oi} style={{ fontSize: 12, padding: '6px 10px', borderRadius: 8, background: oi === q.correcta ? C.green + '15' : 'rgba(0,0,0,0.04)', color: oi === q.correcta ? C.green : '#666', fontWeight: oi === q.correcta ? 800 : 600, border: `1.5px solid ${oi === q.correcta ? C.green + '44' : 'transparent'}` }}>
-                                                                {['A', 'B', 'C', 'D'][oi]}. {opt}
+                                                {/* Vista normal */}
+                                                {!isEditing && (
+                                                    <>
+                                                        <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: 10 }}>
+                                                            <span style={{ width: 26, height: 26, borderRadius: 8, background: C.blue, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 900, flexShrink: 0 }}>{i + 1}</span>
+                                                            <div style={{ flex: 1 }}>
+                                                                <div style={{ fontSize: 11, fontWeight: 700, color: THEME.subtext, marginBottom: 4 }}>{q.nivel} · {q.tipo}</div>
+                                                                <p style={{ fontSize: 14, fontWeight: 700, color: C.dark, margin: 0 }}>{q.pregunta}</p>
                                                             </div>
-                                                        ))}
-                                                    </div>
-                                                </>
-                                            )}
-
-                                            {/* Formulario de edición */}
-                                            {isEditing && editForm && (
-                                                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
-                                                        <span style={{ width: 26, height: 26, borderRadius: 8, background: C.blue, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 900, flexShrink: 0 }}>{i + 1}</span>
-                                                        <span style={{ fontSize: 13, fontWeight: 800, color: C.blue }}>Editando pregunta</span>
-                                                    </div>
-
-                                                    {/* Enunciado */}
-                                                    <div>
-                                                        <label style={{ fontSize: 12, fontWeight: 800, color: THEME.subtext, display: 'block', marginBottom: 5 }}>ENUNCIADO</label>
-                                                        <textarea
-                                                            value={editForm.enunciado}
-                                                            onChange={e => setEditForm(f => ({ ...f, enunciado: e.target.value }))}
-                                                            rows={3}
-                                                            style={{ width: '100%', border: `2px solid ${C.blue}44`, borderRadius: 10, padding: '10px 12px', fontSize: 13.5, fontFamily: 'Nunito', fontWeight: 600, color: C.dark, resize: 'vertical', outline: 'none', boxSizing: 'border-box' }}
-                                                        />
-                                                    </div>
-
-                                                    {/* Opciones */}
-                                                    <div>
-                                                        <label style={{ fontSize: 12, fontWeight: 800, color: THEME.subtext, display: 'block', marginBottom: 8 }}>OPCIONES · Hacé clic en el círculo para marcar la correcta</label>
-                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                                                            {editForm.opciones.map((opt, oi) => (
-                                                                <div key={oi} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                                                    <button
-                                                                        onClick={() => setEditForm(f => ({ ...f, opcion_correcta: oi }))}
-                                                                        style={{ width: 22, height: 22, borderRadius: '50%', border: `2.5px solid ${editForm.opcion_correcta === oi ? C.green : 'rgba(0,0,0,0.15)'}`, background: editForm.opcion_correcta === oi ? C.green : '#fff', flexShrink: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                                        {editForm.opcion_correcta === oi && <span style={{ fontSize: 12, color: '#fff', fontWeight: 900 }}>✓</span>}
-                                                                    </button>
-                                                                    <span style={{ fontSize: 12, fontWeight: 800, color: THEME.subtext, flexShrink: 0 }}>{['A', 'B', 'C', 'D'][oi]}.</span>
-                                                                    <input
-                                                                        value={opt}
-                                                                        onChange={e => setEditForm(f => { const ops = [...f.opciones]; ops[oi] = e.target.value; return { ...f, opciones: ops }; })}
-                                                                        style={{ flex: 1, border: `1.5px solid ${editForm.opcion_correcta === oi ? C.green + '66' : 'rgba(0,0,0,0.1)'}`, borderRadius: 8, padding: '7px 10px', fontSize: 13, fontFamily: 'Nunito', fontWeight: 600, color: C.dark, outline: 'none', background: editForm.opcion_correcta === oi ? C.green + '08' : '#fff' }}
-                                                                    />
+                                                            <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                                                                <button
+                                                                    onClick={() => { setEditandoIdx(i); setEditForm({ enunciado: q.pregunta, opciones: [...q.opciones], opcion_correcta: q.correcta, tipo: q.tipo, dificultad: q.nivel }); }}
+                                                                    style={{ background: 'rgba(0,0,0,0.06)', color: '#666', border: 'none', borderRadius: 10, padding: '6px 12px', fontSize: 12, fontWeight: 800, cursor: 'pointer', fontFamily: 'Nunito' }}>
+                                                                    ✏️ Editar
+                                                                </button>
+                                                                <button onClick={() => toggleAprobada(i)} style={{ background: q.aprobada ? C.green : 'rgba(0,0,0,0.06)', color: q.aprobada ? '#fff' : '#888', border: 'none', borderRadius: 10, padding: '6px 14px', fontSize: 12, fontWeight: 800, cursor: 'pointer', fontFamily: 'Nunito', whiteSpace: 'nowrap' }}>
+                                                                    {q.aprobada ? '✓ Aprobada' : 'Aprobar'}
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, paddingLeft: 36 }}>
+                                                            {q.opciones.map((opt, oi) => (
+                                                                <div key={oi} style={{ fontSize: 12, padding: '6px 10px', borderRadius: 8, background: oi === q.correcta ? C.green + '15' : 'rgba(0,0,0,0.04)', color: oi === q.correcta ? C.green : '#666', fontWeight: oi === q.correcta ? 800 : 600, border: `1.5px solid ${oi === q.correcta ? C.green + '44' : 'transparent'}` }}>
+                                                                    {['A', 'B', 'C', 'D'][oi]}. {opt}
                                                                 </div>
                                                             ))}
                                                         </div>
-                                                    </div>
+                                                    </>
+                                                )}
 
-                                                    {/* Tipo y Dificultad */}
-                                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                                                {/* Formulario de edición */}
+                                                {isEditing && editForm && (
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+                                                            <span style={{ width: 26, height: 26, borderRadius: 8, background: C.blue, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 900, flexShrink: 0 }}>{i + 1}</span>
+                                                            <span style={{ fontSize: 13, fontWeight: 800, color: C.blue }}>Editando pregunta</span>
+                                                        </div>
+
+                                                        {/* Enunciado */}
                                                         <div>
-                                                            <label style={{ fontSize: 12, fontWeight: 800, color: THEME.subtext, display: 'block', marginBottom: 5 }}>TIPO</label>
-                                                            <select value={editForm.tipo} onChange={e => setEditForm(f => ({ ...f, tipo: e.target.value }))}
-                                                                style={{ width: '100%', border: `2px solid rgba(0,0,0,0.1)`, borderRadius: 10, padding: '9px 12px', fontSize: 13, fontFamily: 'Nunito', fontWeight: 700, color: C.dark, outline: 'none', background: '#fff' }}>
-                                                                {['comprensión literal', 'inferencial', 'vocabulario', 'idea principal', 'secuencia', 'causa y efecto'].map(t => (
-                                                                    <option key={t} value={t}>{t}</option>
+                                                            <label style={{ fontSize: 12, fontWeight: 800, color: THEME.subtext, display: 'block', marginBottom: 5 }}>ENUNCIADO</label>
+                                                            <textarea
+                                                                value={editForm.enunciado}
+                                                                onChange={e => setEditForm(f => ({ ...f, enunciado: e.target.value }))}
+                                                                rows={3}
+                                                                style={{ width: '100%', border: `2px solid ${C.blue}44`, borderRadius: 10, padding: '10px 12px', fontSize: 13.5, fontFamily: 'Nunito', fontWeight: 600, color: C.dark, resize: 'vertical', outline: 'none', boxSizing: 'border-box' }}
+                                                            />
+                                                        </div>
+
+                                                        {/* Opciones */}
+                                                        <div>
+                                                            <label style={{ fontSize: 12, fontWeight: 800, color: THEME.subtext, display: 'block', marginBottom: 8 }}>OPCIONES · Hacé clic en el círculo para marcar la correcta</label>
+                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                                                {editForm.opciones.map((opt, oi) => (
+                                                                    <div key={oi} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                                                        <button
+                                                                            onClick={() => setEditForm(f => ({ ...f, opcion_correcta: oi }))}
+                                                                            style={{ width: 22, height: 22, borderRadius: '50%', border: `2.5px solid ${editForm.opcion_correcta === oi ? C.green : 'rgba(0,0,0,0.15)'}`, background: editForm.opcion_correcta === oi ? C.green : '#fff', flexShrink: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                                            {editForm.opcion_correcta === oi && <span style={{ fontSize: 12, color: '#fff', fontWeight: 900 }}>✓</span>}
+                                                                        </button>
+                                                                        <span style={{ fontSize: 12, fontWeight: 800, color: THEME.subtext, flexShrink: 0 }}>{['A', 'B', 'C', 'D'][oi]}.</span>
+                                                                        <input
+                                                                            value={opt}
+                                                                            onChange={e => setEditForm(f => { const ops = [...f.opciones]; ops[oi] = e.target.value; return { ...f, opciones: ops }; })}
+                                                                            style={{ flex: 1, border: `1.5px solid ${editForm.opcion_correcta === oi ? C.green + '66' : 'rgba(0,0,0,0.1)'}`, borderRadius: 8, padding: '7px 10px', fontSize: 13, fontFamily: 'Nunito', fontWeight: 600, color: C.dark, outline: 'none', background: editForm.opcion_correcta === oi ? C.green + '08' : '#fff' }}
+                                                                        />
+                                                                    </div>
                                                                 ))}
-                                                            </select>
+                                                            </div>
                                                         </div>
-                                                        <div>
-                                                            <label style={{ fontSize: 12, fontWeight: 800, color: THEME.subtext, display: 'block', marginBottom: 5 }}>DIFICULTAD</label>
-                                                            <select value={editForm.dificultad} onChange={e => setEditForm(f => ({ ...f, dificultad: e.target.value }))}
-                                                                style={{ width: '100%', border: `2px solid rgba(0,0,0,0.1)`, borderRadius: 10, padding: '9px 12px', fontSize: 13, fontFamily: 'Nunito', fontWeight: 700, color: C.dark, outline: 'none', background: '#fff' }}>
-                                                                <option value="FÁCIL">Básico</option>
-                                                                <option value="MEDIA">Intermedio</option>
-                                                                <option value="DIFÍCIL">Avanzado</option>
-                                                            </select>
-                                                        </div>
-                                                    </div>
 
-                                                    {/* Botones guardar/cancelar */}
-                                                    <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', paddingTop: 4 }}>
-                                                        <button
-                                                            onClick={() => { setEditandoIdx(null); setEditForm(null); }}
-                                                            style={{ padding: '8px 18px', borderRadius: 10, border: '2px solid rgba(0,0,0,0.1)', background: '#fff', fontSize: 12.5, fontWeight: 800, color: '#888', cursor: 'pointer', fontFamily: 'Nunito' }}>
-                                                            Cancelar
-                                                        </button>
-                                                        <button
-                                                            disabled={savingEdit || !editForm.enunciado.trim() || editForm.opciones.some(o => !o.trim())}
-                                                            onClick={async () => {
-                                                                setSavingEdit(true);
-                                                                try {
-                                                                    await editarPregunta(q.id, {
-                                                                        enunciado: editForm.enunciado.trim(),
-                                                                        opciones: editForm.opciones.map(o => o.trim()),
-                                                                        opcion_correcta: editForm.opcion_correcta,
-                                                                        tipo: editForm.tipo,
-                                                                        dificultad: editForm.dificultad,
-                                                                    });
-                                                                    // Actualizar la pregunta localmente
-                                                                    setQuestions(prev => prev.map((pq, pi) =>
-                                                                        pi === i ? { ...pq, pregunta: editForm.enunciado.trim(), opciones: editForm.opciones.map(o => o.trim()), correcta: editForm.opcion_correcta, tipo: editForm.tipo, nivel: editForm.dificultad } : pq
-                                                                    ));
-                                                                    setEditandoIdx(null);
-                                                                    setEditForm(null);
-                                                                } catch (e) {
-                                                                    alert('No se pudo guardar la edición. Intentá de nuevo.');
-                                                                } finally {
-                                                                    setSavingEdit(false);
-                                                                }
-                                                            }}
-                                                            style={{ padding: '8px 18px', borderRadius: 10, border: 'none', background: savingEdit ? '#ccc' : C.blue, fontSize: 12.5, fontWeight: 800, color: '#fff', cursor: savingEdit ? 'default' : 'pointer', fontFamily: 'Nunito' }}>
-                                                            {savingEdit ? 'Guardando…' : '✓ Guardar cambios'}
-                                                        </button>
+                                                        {/* Tipo y Dificultad */}
+                                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                                                            <div>
+                                                                <label style={{ fontSize: 12, fontWeight: 800, color: THEME.subtext, display: 'block', marginBottom: 5 }}>TIPO</label>
+                                                                <select value={editForm.tipo} onChange={e => setEditForm(f => ({ ...f, tipo: e.target.value }))}
+                                                                    style={{ width: '100%', border: `2px solid rgba(0,0,0,0.1)`, borderRadius: 10, padding: '9px 12px', fontSize: 13, fontFamily: 'Nunito', fontWeight: 700, color: C.dark, outline: 'none', background: '#fff' }}>
+                                                                    {['comprensión literal', 'inferencial', 'vocabulario', 'idea principal', 'secuencia', 'causa y efecto'].map(t => (
+                                                                        <option key={t} value={t}>{t}</option>
+                                                                    ))}
+                                                                </select>
+                                                            </div>
+                                                            <div>
+                                                                <label style={{ fontSize: 12, fontWeight: 800, color: THEME.subtext, display: 'block', marginBottom: 5 }}>DIFICULTAD</label>
+                                                                <select value={editForm.dificultad} onChange={e => setEditForm(f => ({ ...f, dificultad: e.target.value }))}
+                                                                    style={{ width: '100%', border: `2px solid rgba(0,0,0,0.1)`, borderRadius: 10, padding: '9px 12px', fontSize: 13, fontFamily: 'Nunito', fontWeight: 700, color: C.dark, outline: 'none', background: '#fff' }}>
+                                                                    <option value="FÁCIL">Básico</option>
+                                                                    <option value="MEDIA">Intermedio</option>
+                                                                    <option value="DIFÍCIL">Avanzado</option>
+                                                                </select>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Botones guardar/cancelar */}
+                                                        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', paddingTop: 4 }}>
+                                                            <button
+                                                                onClick={() => { setEditandoIdx(null); setEditForm(null); }}
+                                                                style={{ padding: '8px 18px', borderRadius: 10, border: '2px solid rgba(0,0,0,0.1)', background: '#fff', fontSize: 12.5, fontWeight: 800, color: '#888', cursor: 'pointer', fontFamily: 'Nunito' }}>
+                                                                Cancelar
+                                                            </button>
+                                                            <button
+                                                                disabled={savingEdit || !editForm.enunciado.trim() || editForm.opciones.some(o => !o.trim())}
+                                                                onClick={async () => {
+                                                                    setSavingEdit(true);
+                                                                    try {
+                                                                        await editarPregunta(q.id, {
+                                                                            enunciado: editForm.enunciado.trim(),
+                                                                            opciones: editForm.opciones.map(o => o.trim()),
+                                                                            opcion_correcta: editForm.opcion_correcta,
+                                                                            tipo: editForm.tipo,
+                                                                            dificultad: editForm.dificultad,
+                                                                        });
+                                                                        // Actualizar la pregunta localmente
+                                                                        setQuestions(prev => prev.map((pq, pi) =>
+                                                                            pi === i ? { ...pq, pregunta: editForm.enunciado.trim(), opciones: editForm.opciones.map(o => o.trim()), correcta: editForm.opcion_correcta, tipo: editForm.tipo, nivel: editForm.dificultad } : pq
+                                                                        ));
+                                                                        setEditandoIdx(null);
+                                                                        setEditForm(null);
+                                                                    } catch (e) {
+                                                                        alert('No se pudo guardar la edición. Intentá de nuevo.');
+                                                                    } finally {
+                                                                        setSavingEdit(false);
+                                                                    }
+                                                                }}
+                                                                style={{ padding: '8px 18px', borderRadius: 10, border: 'none', background: savingEdit ? '#ccc' : C.blue, fontSize: 12.5, fontWeight: 800, color: '#fff', cursor: savingEdit ? 'default' : 'pointer', fontFamily: 'Nunito' }}>
+                                                                {savingEdit ? 'Guardando…' : '✓ Guardar cambios'}
+                                                            </button>
+                                                        </div>
                                                     </div>
-                                                </div>
-                                            )}
-                                        </div>
-                                    );
-                                })}
-                            </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                    {esRetomar && (
+                                        <button
+                                            onClick={handleGenerarMas}
+                                            disabled={generandoMas}
+                                            style={{ alignSelf: 'flex-start', padding: '10px 18px', borderRadius: 12, border: `2px dashed ${C.blue}55`, background: generandoMas ? 'rgba(0,0,0,0.03)' : C.blueLight, fontSize: 13, fontWeight: 800, color: C.blue, cursor: generandoMas ? 'default' : 'pointer', fontFamily: 'Nunito' }}>
+                                            {generandoMas ? '✨ Generando…' : '✨ Generar más preguntas'}
+                                        </button>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>
@@ -1037,11 +1087,15 @@ function CreateModal({ onClose, onPublish }) {
                         )}
                         {step === 4 && (
                             <>
-                                <button onClick={() => setStep(2)} style={btnSecondary}>← Atrás</button>
-                                <button onClick={handlePublish} disabled={questions.filter(q => q.aprobada).length < 6}
-                                    style={{ ...btnPrimary, background: questions.filter(q => q.aprobada).length >= 6 ? C.green : '#ccc', cursor: questions.filter(q => q.aprobada).length >= 6 ? 'pointer' : 'default' }}>
-                                    ✓ Publicar actividad ({questions.filter(q => q.aprobada).length} aprobadas)
-                                </button>
+                                {esRetomar && <button onClick={() => onEliminar(actividadId)} style={{ ...btnSecondary, color: '#ff4d4f', borderColor: '#ff4d4f44' }}>🗑 Eliminar actividad</button>}
+                                {esDesdeTexto && <button onClick={onClose} style={btnSecondary}>Cerrar</button>}
+                                {!esRetomar && !esDesdeTexto && <button onClick={() => setStep(2)} style={btnSecondary}>← Atrás</button>}
+                                {actividadId && (
+                                    <button onClick={handlePublish} disabled={questions.filter(q => q.aprobada).length < 6}
+                                        style={{ ...btnPrimary, background: questions.filter(q => q.aprobada).length >= 6 ? C.green : '#ccc', cursor: questions.filter(q => q.aprobada).length >= 6 ? 'pointer' : 'default' }}>
+                                        ✓ Publicar actividad ({questions.filter(q => q.aprobada).length} aprobadas)
+                                    </button>
+                                )}
                             </>
                         )}
                     </div>
@@ -1084,6 +1138,9 @@ function PreguntasModal({ actividad_id, titulo, onClose }) {
     const total = data
         ? Object.values(data.preguntas_por_nivel).reduce((s, ps) => s + ps.length, 0)
         : 0;
+    const totalValidadas = data
+        ? Object.values(data.preguntas_por_nivel).reduce((s, ps) => s + ps.filter(p => p.validada).length, 0)
+        : 0;
 
     return (
         <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(42,42,42,0.55)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 24, animation: 'fadeIn 0.2s' }}>
@@ -1095,7 +1152,7 @@ function PreguntasModal({ actividad_id, titulo, onClose }) {
                     <div style={{ flex: 1 }}>
                         <h2 style={{ fontSize: 18, fontWeight: 900, color: '#fff' }}>Preguntas · {titulo}</h2>
                         <p style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.8)', fontWeight: 600 }}>
-                            {loading ? 'Cargando…' : `${total} preguntas en 3 niveles`}
+                            {loading ? 'Cargando…' : `${totalValidadas} de ${total} preguntas publicadas para alumnos`}
                         </p>
                     </div>
                     <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: 10, width: 34, height: 34, cursor: 'pointer', color: '#fff', fontSize: 18, fontWeight: 900 }}>×</button>
@@ -1133,17 +1190,23 @@ function PreguntasModal({ actividad_id, titulo, onClose }) {
                         {preguntasFiltradas.map((q, i) => {
                             const nColor = NIVEL_COLOR[q.nivel] || C.blue;
                             const nLabel = NIVEL_LABEL[q.nivel] || q.nivel;
+                            const validada = !!q.validada;
                             return (
-                                <div key={q.id || i} style={{ border: `1.5px solid rgba(0,0,0,0.08)`, borderRadius: 14, padding: '16px 18px', background: '#fafafa' }}>
+                                <div key={q.id || i} style={{ border: `1.5px solid ${validada ? 'rgba(0,0,0,0.08)' : C.red + '33'}`, borderRadius: 14, padding: '16px 18px', background: validada ? '#fafafa' : C.red + '06', opacity: validada ? 1 : 0.85 }}>
                                     {/* Cabecera de la pregunta */}
                                     <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: 12 }}>
                                         <span style={{ width: 28, height: 28, borderRadius: 8, background: nColor, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 900, flexShrink: 0 }}>{i + 1}</span>
                                         <div style={{ flex: 1 }}>
-                                            <div style={{ display: 'flex', gap: 6, marginBottom: 6, flexWrap: 'wrap' }}>
+                                            <div style={{ display: 'flex', gap: 6, marginBottom: 6, flexWrap: 'wrap', alignItems: 'center' }}>
                                                 <span style={{ background: nColor + '20', color: nColor, fontSize: 11, fontWeight: 800, borderRadius: 20, padding: '2px 10px' }}>{nLabel}</span>
                                                 {q.tipo && <span style={{ background: 'rgba(0,0,0,0.06)', color: '#666', fontSize: 11, fontWeight: 700, borderRadius: 20, padding: '2px 10px' }}>{q.tipo}</span>}
+                                                {validada
+                                                    ? <span style={{ background: C.green + '18', color: C.green, fontSize: 11, fontWeight: 800, borderRadius: 20, padding: '2px 10px' }}>✓ Publicada</span>
+                                                    : <span style={{ background: C.red + '18', color: C.red, fontSize: 11, fontWeight: 800, borderRadius: 20, padding: '2px 10px' }}>No publicada</span>
+                                                }
                                             </div>
                                             <p style={{ fontSize: 14.5, fontWeight: 700, color: C.dark, margin: 0, lineHeight: 1.45 }}>{q.enunciado || q.pregunta}</p>
+                                            {!validada && <p style={{ fontSize: 11.5, color: C.red, fontWeight: 600, margin: '4px 0 0' }}>Esta pregunta no fue aprobada y los alumnos nunca la ven.</p>}
                                         </div>
                                     </div>
                                     {/* Opciones */}
@@ -1283,7 +1346,7 @@ function Toast({ msg }) {
 // ══════════════════════════════════════════════════════════════
 // CONTENIDO — Actividades
 // ══════════════════════════════════════════════════════════════
-function ActividadesContent({ acts, loading, onOpenModal, onVerPreguntas, onVerResultados, onEliminar }) {
+function ActividadesContent({ acts, loading, onOpenModal, onVerPreguntas, onVerResultados, onEliminar, onRetomar, onGenerarDesdeTexto, onEliminarTexto }) {
     const publicadas = acts.filter((a) => a.validada).length;
     return (
         <>
@@ -1296,7 +1359,6 @@ function ActividadesContent({ acts, loading, onOpenModal, onVerPreguntas, onVerR
                 {[
                     { label: 'Textos subidos', value: acts.length, icon: '📚', color: C.blue },
                     { label: 'Publicadas', value: publicadas, icon: '✅', color: C.green },
-                    { label: 'En borrador', value: acts.filter(a => a.actividad_id && !a.validada).length, icon: '⏳', color: C.yellow },
                     { label: 'Sin actividad', value: acts.filter(a => !a.actividad_id).length, icon: '📄', color: C.pink },
                 ].map((s, i) => (
                     <div key={i} style={{ flex: 1, background: s.color, borderRadius: 16, padding: '16px 18px', position: 'relative', overflow: 'hidden' }}>
@@ -1312,7 +1374,7 @@ function ActividadesContent({ acts, loading, onOpenModal, onVerPreguntas, onVerR
                 : (
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 20 }}>
                         <NewActivityCard onClick={onOpenModal} />
-                        {acts.map((act, i) => <ActivityCard key={act.texto_id} act={act} color={ACT_COLORS[i % ACT_COLORS.length]} onVerPreguntas={onVerPreguntas} onVerResultados={onVerResultados} onEliminar={onEliminar} />)}
+                        {acts.map((act, i) => <ActivityCard key={act.texto_id} act={act} color={ACT_COLORS[i % ACT_COLORS.length]} onVerPreguntas={onVerPreguntas} onVerResultados={onVerResultados} onEliminar={onEliminar} onRetomar={onRetomar} onGenerarDesdeTexto={onGenerarDesdeTexto} onEliminarTexto={onEliminarTexto} />)}
                     </div>
                 )
             }
@@ -1326,7 +1388,7 @@ function ActividadesContent({ acts, loading, onOpenModal, onVerPreguntas, onVerR
 export default function PanelDocente({ user, onLogout }) {
     const [activeNav, setActiveNav] = useState('clase');
     const [collapsed, setCollapsed] = useState(false);
-    const [modal, setModal] = useState(false);
+    const [modal, setModal] = useState(null); // null = cerrado, {} = crear nueva, {actividad_id, titulo} = retomar borrador
     const [toast, setToast] = useState('');
     const [resultadosModal, setResultadosModal] = useState(null);
     const [preguntasModal, setPreguntasModal] = useState(null);
@@ -1384,6 +1446,7 @@ export default function PanelDocente({ user, onLogout }) {
             await eliminarActividad(actividadId);
             setActs(prev => prev.filter(a => a.actividad_id !== actividadId));
             setResumen('');
+            setModal(null);
             setToast('Actividad eliminada correctamente');
             setTimeout(() => setToast(''), 3000);
         } catch (err) {
@@ -1392,8 +1455,21 @@ export default function PanelDocente({ user, onLogout }) {
         }
     };
 
+    const handleEliminarTexto = async (textoId) => {
+        if (!window.confirm('¿Eliminás este texto? Esta acción no se puede deshacer.')) return;
+        try {
+            await eliminarTexto(textoId);
+            setActs(prev => prev.filter(a => a.texto_id !== textoId));
+            setToast('Texto eliminado correctamente');
+            setTimeout(() => setToast(''), 3000);
+        } catch (err) {
+            setToast(err.message || 'No se pudo eliminar el texto');
+            setTimeout(() => setToast(''), 3000);
+        }
+    };
+
     const handlePublish = (data) => {
-        setModal(false);
+        setModal(null);
         setToast(`"${data.titulo}" publicada correctamente`);
         setTimeout(() => setToast(''), 3500);
         setResumen('');
@@ -1404,7 +1480,16 @@ export default function PanelDocente({ user, onLogout }) {
 
     const renderContent = () => {
         if (activeNav === 'actividades')
-            return <ActividadesContent acts={acts} loading={loadingActs} onOpenModal={() => setModal(true)} onVerPreguntas={(id, titulo) => setPreguntasModal({ actividad_id: id, titulo })} onVerResultados={(id, titulo) => setResultadosModal({ actividad_id: id, titulo })} onEliminar={handleEliminar} />;
+            return <ActividadesContent
+                acts={acts} loading={loadingActs}
+                onOpenModal={() => setModal({ tipo: 'nueva' })}
+                onVerPreguntas={(id, titulo) => setPreguntasModal({ actividad_id: id, titulo })}
+                onVerResultados={(id, titulo) => setResultadosModal({ actividad_id: id, titulo })}
+                onEliminar={handleEliminar}
+                onRetomar={(id, titulo) => setModal({ tipo: 'retomar', actividad_id: id, titulo })}
+                onGenerarDesdeTexto={(textoId, titulo) => setModal({ tipo: 'desdeTexto', texto_id: textoId, titulo })}
+                onEliminarTexto={handleEliminarTexto}
+            />;
         if (activeNav === 'clase')
             return <MiClaseContent students={students} loadingStudents={loadingStudents} codigoClase={user?.codigo_clase} onAlumnoCreado={() => { recargarAlumnos(); setToast('Alumno creado correctamente'); setTimeout(() => setToast(''), 3000); }} />;
         return <ProgresoContent students={students} loadingStudents={loadingStudents} resumen={resumen} loadingResumen={loadingResumen} progresoActs={progresoActs} loadingProgreso={loadingProgreso} onActualizarResumen={recargarResumenIA} />;
@@ -1428,7 +1513,13 @@ export default function PanelDocente({ user, onLogout }) {
                 </div>
             </div>
 
-            {modal && <CreateModal onClose={() => setModal(false)} onPublish={handlePublish} />}
+            {modal && <CreateModal
+                onClose={() => setModal(null)}
+                onPublish={handlePublish}
+                onEliminar={handleEliminar}
+                actividadExistente={modal.tipo === 'retomar' ? modal : null}
+                textoExistente={modal.tipo === 'desdeTexto' ? modal : null}
+            />}
             {preguntasModal && <PreguntasModal actividad_id={preguntasModal.actividad_id} titulo={preguntasModal.titulo} onClose={() => setPreguntasModal(null)} />}
             {resultadosModal && <ResultadosModal actividad_id={resultadosModal.actividad_id} titulo={resultadosModal.titulo} onClose={() => setResultadosModal(null)} />}
             {toast && <Toast msg={toast} />}

@@ -95,6 +95,117 @@ Recordá: aprobada=true solo si TODAS las cuatro dimensiones tienen puntaje ≥ 
 """
 
 
+def construir_prompt_generador_lote(
+    texto, dificultad, tipos, posiciones, preguntas_anteriores, specs,
+    feedbacks=None, aspectos_previos=None
+):
+    """
+    Construye el prompt para el GENERADOR en modo batch.
+
+    Pide todas las preguntas de un nivel en una sola llamada, en lugar de
+    una llamada por pregunta. Esto reduce drásticamente el consumo de
+    tokens (el texto y las specs se envían una sola vez) y además ayuda
+    a que el modelo no se repita a sí mismo, porque genera todo el lote
+    con visión simultánea de las preguntas anteriores y de las nuevas.
+
+    Args:
+        texto: el texto fuente.
+        dificultad: FÁCIL, MEDIA o DIFÍCIL.
+        tipos: lista de tipos de pregunta, uno por slot.
+        posiciones: lista de posiciones 0-3 donde debe ir la opción correcta,
+            una por slot, en el mismo orden que tipos.
+        preguntas_anteriores: lista de preguntas ya aprobadas (de niveles
+            previos en la misma actividad).
+        specs: especificaciones pedagógicas (de specs_para_generador()).
+        feedbacks: dict opcional {indice_slot: sugerencia_del_juez} para
+            reintentos con corrección dirigida.
+        aspectos_previos: lista de strings con aspectos ya cubiertos por
+            preguntas anteriores (de niveles previos).
+    """
+    feedbacks = feedbacks or {}
+    n = len(tipos)
+
+    slots_desc = []
+    for i, (tipo, pos) in enumerate(zip(tipos, posiciones)):
+        bloque = f'- Slot {i}: tipo="{tipo}", posición de la opción correcta={pos}'
+        if i in feedbacks:
+            bloque += f'\n  REINTENTO — la versión anterior fue rechazada por: {feedbacks[i]}\n  Corregí ese problema específico en esta nueva versión.'
+        slots_desc.append(bloque)
+    bloque_slots = "\n".join(slots_desc)
+
+    bloque_aspectos = ""
+    if aspectos_previos:
+        lista = "\n".join(f"- {a}" for a in aspectos_previos)
+        bloque_aspectos = f"""
+## ASPECTOS YA CUBIERTOS (no repetir)
+Preguntas de niveles anteriores ya cubren estos aspectos del texto:
+{lista}
+
+Ninguna de las nuevas preguntas debe apuntar a estos aspectos.
+"""
+
+    bloque_anteriores = ""
+    if preguntas_anteriores:
+        bloque_anteriores = f"""
+## PREGUNTAS YA GENERADAS EN ESTA ACTIVIDAD (no repetir ideas ni wording)
+{json.dumps([p['pregunta'] for p in preguntas_anteriores], ensure_ascii=False)}
+"""
+
+    return f"""Sos un asistente pedagógico especializado en comprensión lectora
+para niños argentinos de primaria (8 a 12 años). Conocés y respetás los
+siguientes criterios pedagógicos.
+
+## CRITERIOS PEDAGÓGICOS
+{specs}
+
+## TAREA
+Generá {n} preguntas de comprensión lectora DISTINTAS entre sí, una por
+cada slot detallado abajo, siguiendo estrictamente los criterios anteriores.
+Cada pregunta debe apuntar a un aspecto diferente del texto: no repitas
+ideas, datos ni wording entre las {n} preguntas de este lote.
+
+## QUÉ SIGNIFICA CADA DIFICULTAD (aplica a TODAS las preguntas de este lote)
+- FÁCIL: pregunta sobre información explícita y directa del texto. El estudiante
+  solo necesita localizar y leer. Sin inferencias. Vocabulario simple.
+- MEDIA: puede requerir relacionar dos partes del texto o una inferencia simple.
+  Vocabulario accesible pero con algún término que requiera atención.
+- DIFÍCIL: requiere inferencia, análisis de causa-efecto, interpretación del
+  significado global o relación entre ideas no contiguas del texto. NO puede
+  ser una pregunta literal. Vocabulario más preciso y opciones más desafiantes.
+
+Dificultad pedida para TODO el lote: {dificultad}
+
+## SLOTS A GENERAR
+Cada slot define el tipo de pregunta y en qué posición (0-3) debe quedar
+la opción correcta. Respetá exactamente la posición indicada por slot.
+{bloque_slots}
+{bloque_anteriores}{bloque_aspectos}
+## ORTOGRAFÍA
+Revisá la ortografía y gramática antes de responder. No uses errores tipográficos
+ni palabras mal escritas en ninguna pregunta ni opción.
+
+## FORMATO
+Devolvé ÚNICAMENTE un JSON válido con esta forma exacta — un objeto con
+una clave "preguntas" cuyo valor es un array de {n} objetos, uno por slot,
+EN EL MISMO ORDEN en que aparecen arriba (slot 0 primero, slot 1 segundo, etc).
+Sin texto extra, sin markdown:
+
+{{
+  "preguntas": [
+    {{
+      "pregunta": "...",
+      "opciones": ["opción 0", "opción 1", "opción 2", "opción 3"],
+      "correcta": <posición indicada para ese slot>
+    }},
+    ...
+  ]
+}}
+
+## TEXTO
+{texto}
+"""
+
+
 def construir_prompt_generador(
     texto, dificultad, tipo, pos, preguntas_anteriores, specs,
     feedback=None, aspectos_previos=None

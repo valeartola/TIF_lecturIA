@@ -59,6 +59,15 @@ export function loginAlumno(codigoClase, nombre, password) {
     });
 }
 
+/** Registro de un nuevo docente: nombre + email + password. Devuelve los datos del docente, incluido su código de clase. */
+export function registrarDocente(nombre, email, password) {
+    return apiFetch('/auth/registro', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nombre, email, password }),
+    });
+}
+
 /** Devuelve el usuario logueado según el JWT */
 export const getMe = () => apiFetch('/auth/me');
 
@@ -96,9 +105,17 @@ export const getTexto = (textoId) => apiFetch(`/textos/${textoId}`);
 
 // ── Actividades ──────────────────────────────────────────────
 
+/** Elimina un texto sin actividad asociada (caso huérfano por generación fallida) */
+export const eliminarTexto = (textoId) =>
+    apiFetch(`/textos/${textoId}`, { method: 'DELETE' });
+
 /** Genera actividad + preguntas con IA a partir de un texto */
 export const generarActividad = (textoId) =>
     apiFetch(`/actividades/generar?texto_id=${textoId}`, { method: 'POST' });
+
+/** Genera más preguntas sobre una actividad EXISTENTE que quedó en borrador */
+export const generarMasPreguntas = (actividadId) =>
+    apiFetch(`/actividades/${actividadId}/generar-mas`, { method: 'POST' });
 
 /** Valida una pregunta individual (docente) */
 export const validarPregunta = (preguntaId) =>
