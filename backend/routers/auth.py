@@ -24,6 +24,7 @@ class RegistroDocente(BaseModel):
 
 class CrearAlumno(BaseModel):
     nombre: str
+    apellido: str
     password: str
 
 
@@ -38,6 +39,13 @@ def _generar_codigo_clase(session: Session) -> str:
         ).first()
         if not existe:
             return codigo
+
+
+def _nombre_completo(usuario: Usuario) -> str:
+    """Devuelve 'Nombre Apellido' si tiene apellido, o solo 'Nombre'."""
+    if usuario.apellido:
+        return f"{usuario.nombre} {usuario.apellido}"
+    return usuario.nombre
 
 
 @router.post("/registro")
@@ -60,7 +68,7 @@ def registro(datos: RegistroDocente, session: Session = Depends(get_session)):
         "nombre": docente.nombre,
         "email": docente.email,
         "rol": docente.rol,
-        "codigo_clase": docente.codigo_clase,  # el docente lo comparte con sus alumnos
+        "codigo_clase": docente.codigo_clase,
     }
 
 
@@ -69,26 +77,42 @@ def login(form: OAuth2PasswordRequestForm = Depends(), session: Session = Depend
     """
     Login unificado:
       - Docente: usuario = su email.
-      - Alumno:  usuario = "CODIGO-CLASE/Nombre del alumno" (ej: "ABCD-2345/Ana Pérez").
+      - Alumno:  usuario = "CODIGO-CLASE/Nombre Apellido" (ej: "ABCD-2345/Ana Torres").
     La contraseña va siempre en el campo password.
+    El login del alumno busca por nombre completo (nombre + apellido).
     """
     usuario_campo = form.username
 
     if "/" in usuario_campo:
-        # --- Alumno: código de clase + nombre ---
-        codigo, nombre = usuario_campo.split("/", 1)
+        # --- Alumno: código de clase + nombre completo ---
+        codigo, nombre_completo = usuario_campo.split("/", 1)
+        nombre_completo = nombre_completo.strip()
         docente = session.exec(
             select(Usuario).where(Usuario.codigo_clase == codigo.strip())
         ).first()
         usuario = None
         if docente:
-            usuario = session.exec(
-                select(Usuario).where(
-                    Usuario.docente_id == docente.id,
-                    Usuario.nombre == nombre.strip(),
-                    Usuario.rol == "alumno",
-                )
-            ).first()
+            # Buscar primero por nombre completo exacto (nombre + apellido)
+            partes = nombre_completo.split(" ", 1)
+            if len(partes) == 2:
+                nombre, apellido = partes
+                usuario = session.exec(
+                    select(Usuario).where(
+                        Usuario.docente_id == docente.id,
+                        Usuario.nombre == nombre,
+                        Usuario.apellido == apellido,
+                        Usuario.rol == "alumno",
+                    )
+                ).first()
+            # Fallback: buscar solo por nombre (compatibilidad con alumnos sin apellido)
+            if not usuario:
+                usuario = session.exec(
+                    select(Usuario).where(
+                        Usuario.docente_id == docente.id,
+                        Usuario.nombre == nombre_completo,
+                        Usuario.rol == "alumno",
+                    )
+                ).first()
     else:
         # --- Docente: email ---
         usuario = session.exec(
@@ -107,9 +131,10 @@ def me(usuario: Usuario = Depends(get_usuario_actual)):
     return {
         "id": usuario.id,
         "nombre": usuario.nombre,
+        "apellido": usuario.apellido,
         "email": usuario.email,
         "rol": usuario.rol,
-        "codigo_clase": usuario.codigo_clase,  # None para alumnos
+        "codigo_clase": usuario.codigo_clase,
     }
 
 
@@ -119,31 +144,38 @@ def crear_alumno(
     docente: Usuario = Depends(solo_docente),
     session: Session = Depends(get_session)
 ):
-    # El nombre debe ser único dentro de la clase del docente, porque es
-    # parte de la credencial de login del alumno.
+    nombre = datos.nombre.strip()
+    apellido = datos.apellido.strip()
+
+    if not nombre or not apellido:
+        raise HTTPException(status_code=400, detail="Nombre y apellido son obligatorios")
+
+    # El nombre + apellido debe ser único dentro de la clase
     existente = session.exec(
         select(Usuario).where(
             Usuario.docente_id == docente.id,
-            Usuario.nombre == datos.nombre,
+            Usuario.nombre == nombre,
+            Usuario.apellido == apellido,
             Usuario.rol == "alumno",
         )
     ).first()
     if existente:
         raise HTTPException(
             status_code=400,
-            detail="Ya tenés un alumno con ese nombre en la clase",
+            detail="Ya tenés un alumno con ese nombre y apellido en la clase",
         )
 
     alumno = Usuario(
-        nombre=datos.nombre,
+        nombre=nombre,
+        apellido=apellido,
         password_hash=hashear_password(datos.password),
         rol="alumno",
-        docente_id=docente.id,  # ← se asigna automáticamente
+        docente_id=docente.id,
     )
     session.add(alumno)
     session.commit()
     session.refresh(alumno)
-    return {"id": alumno.id, "nombre": alumno.nombre, "rol": alumno.rol}
+    return {"id": alumno.id, "nombre": alumno.nombre, "apellido": alumno.apellido, "rol": alumno.rol}
 
 
 @router.get("/alumnos")
@@ -154,7 +186,71 @@ def listar_alumnos(
     alumnos = session.exec(
         select(Usuario).where(
             Usuario.rol == "alumno",
-            Usuario.docente_id == docente.id  # ← solo los suyos
+            Usuario.docente_id == docente.id
         )
     ).all()
-    return [{"id": a.id, "nombre": a.nombre} for a in alumnos]
+    return [{"id": a.id, "nombre": a.nombre, "apellido": a.apellido} for a in alumnos]
+
+
+class EditarAlumno(BaseModel):
+    nombre: str
+    apellido: str
+
+
+class EditarNombreDocente(BaseModel):
+    nombre: str
+
+
+@router.put("/alumnos/{alumno_id}/nombre")
+def editar_alumno(
+    alumno_id: int,
+    datos: EditarAlumno,
+    docente: Usuario = Depends(solo_docente),
+    session: Session = Depends(get_session)
+):
+    alumno = session.get(Usuario, alumno_id)
+    if not alumno or alumno.docente_id != docente.id or alumno.rol != "alumno":
+        raise HTTPException(status_code=404, detail="Alumno no encontrado en tu clase")
+
+    nombre = datos.nombre.strip()
+    apellido = datos.apellido.strip()
+
+    if not nombre or not apellido:
+        raise HTTPException(status_code=400, detail="Nombre y apellido son obligatorios")
+
+    # Verificar unicidad (excluyendo el mismo alumno)
+    existente = session.exec(
+        select(Usuario).where(
+            Usuario.docente_id == docente.id,
+            Usuario.nombre == nombre,
+            Usuario.apellido == apellido,
+            Usuario.rol == "alumno",
+            Usuario.id != alumno_id,
+        )
+    ).first()
+    if existente:
+        raise HTTPException(status_code=400, detail="Ya tenés un alumno con ese nombre y apellido")
+
+    alumno.nombre = nombre
+    alumno.apellido = apellido
+    session.add(alumno)
+    session.commit()
+    session.refresh(alumno)
+    return {"id": alumno.id, "nombre": alumno.nombre, "apellido": alumno.apellido}
+
+
+@router.put("/me/nombre")
+def editar_nombre_docente(
+    datos: EditarNombreDocente,
+    usuario: Usuario = Depends(get_usuario_actual),
+    session: Session = Depends(get_session)
+):
+    nuevo_nombre = datos.nombre.strip()
+    if not nuevo_nombre:
+        raise HTTPException(status_code=400, detail="El nombre no puede estar vacío")
+
+    usuario.nombre = nuevo_nombre
+    session.add(usuario)
+    session.commit()
+    session.refresh(usuario)
+    return {"id": usuario.id, "nombre": usuario.nombre}

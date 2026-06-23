@@ -4,6 +4,7 @@ import {
     listarAlumnos, listarMisActividades, subirTexto,
     generarActividad, validarPregunta, publicarActividad,
     getResumenIA, crearAlumno, getResumenGrupal, eliminarActividad, getActividad, getProgresoAlumno, editarPregunta, generarMasPreguntas, eliminarTexto,
+    editarNombreAlumno, editarNombreDocente,
 } from '../api';
 
 // ── Colores de actividades ────────────────────────────────────
@@ -40,47 +41,144 @@ const THEME = {
 // ══════════════════════════════════════════════════════════════
 // SIDEBAR
 // ══════════════════════════════════════════════════════════════
-function Sidebar({ active, onNav, collapsed, user, onLogout }) {
+function Sidebar({ active, onNav, collapsed, user, onLogout, onNombreDocenteEditado }) {
     const t = THEME.sidebar;
-    return (
-        <div style={{ width: collapsed ? 72 : 230, minHeight: '100vh', background: t.bg, display: 'flex', flexDirection: 'column', transition: 'width 0.25s', flexShrink: 0, zIndex: 2, boxShadow: '2px 0 12px rgba(0,0,0,0.06)' }}>
-            <div style={{ padding: collapsed ? '24px 0' : '28px 24px 20px', display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'flex-start', gap: 10 }}>
-                <img src="/uploads/MiniLogo.png" alt="LecturIA" style={{ width: 44, height: 44, objectFit: 'contain', borderRadius: 10, flexShrink: 0 }} />
-                {!collapsed && (
-                    <div>
-                        <div style={{ fontWeight: 900, fontSize: 17, letterSpacing: -0.3 }}>
-                            <span style={{ color: C.green }}>Lectur</span><span style={{ color: C.yellow }}>IA</span>
-                        </div>
-                        <div style={{ fontSize: 10.5, color: t.subtext, fontWeight: 600, marginTop: 1 }}>para docentes</div>
-                    </div>
-                )}
-            </div>
+    const [modalPerfil, setModalPerfil] = useState(false);
+    const [editandoNombre, setEditandoNombre] = useState(false);
+    const [nuevoNombre, setNuevoNombre] = useState('');
+    const [guardandoNombre, setGuardandoNombre] = useState(false);
 
-            <nav style={{ flex: 1, padding: '8px 0' }}>
-                {!collapsed && (
-                    <div onClick={onLogout} title="Cerrar sesión" style={{ padding: '6px 20px 16px', cursor: 'pointer', marginBottom: 8, borderBottom: '1px solid rgba(0,0,0,0.08)' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                            <div style={{ width: 36, height: 36, borderRadius: '50%', background: C.yellow, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: 15, color: C.dark, flexShrink: 0 }}>
+    const iniciarEdicion = () => {
+        setNuevoNombre(user?.nombre || '');
+        setEditandoNombre(true);
+    };
+
+    const guardarNombre = async () => {
+        if (!nuevoNombre.trim() || nuevoNombre.trim() === user?.nombre) {
+            setEditandoNombre(false);
+            return;
+        }
+        setGuardandoNombre(true);
+        try {
+            await editarNombreDocente(nuevoNombre.trim());
+            onNombreDocenteEditado(nuevoNombre.trim());
+            setEditandoNombre(false);
+            setModalPerfil(false);
+        } catch (e) {
+            alert(e.message || 'No se pudo guardar el nombre');
+        } finally {
+            setGuardandoNombre(false);
+        }
+    };
+
+    return (
+        <>
+            <div style={{ width: collapsed ? 72 : 230, minHeight: '100vh', background: t.bg, display: 'flex', flexDirection: 'column', transition: 'width 0.25s', flexShrink: 0, zIndex: 2, boxShadow: '2px 0 12px rgba(0,0,0,0.06)' }}>
+                <div style={{ padding: collapsed ? '24px 0' : '28px 24px 20px', display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'flex-start', gap: 10 }}>
+                    <img src="/uploads/MiniLogo.png" alt="LecturIA" style={{ width: 44, height: 44, objectFit: 'contain', borderRadius: 10, flexShrink: 0 }} />
+                    {!collapsed && (
+                        <div>
+                            <div style={{ fontWeight: 900, fontSize: 17, letterSpacing: -0.3 }}>
+                                <span style={{ color: C.green }}>Lectur</span><span style={{ color: C.yellow }}>IA</span>
+                            </div>
+                            <div style={{ fontSize: 10.5, color: t.subtext, fontWeight: 600, marginTop: 1 }}>para docentes</div>
+                        </div>
+                    )}
+                </div>
+
+                <nav style={{ flex: 1, padding: '8px 0' }}>
+                    {!collapsed && (
+                        <div style={{ padding: '6px 20px 16px', marginBottom: 8, borderBottom: '1px solid rgba(0,0,0,0.08)' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <div
+                                    onClick={() => setModalPerfil(true)}
+                                    title="Ver perfil"
+                                    style={{ cursor: 'pointer', width: 36, height: 36, borderRadius: '50%', background: C.yellow, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: 15, color: C.dark, flexShrink: 0, transition: 'opacity 0.15s' }}
+                                    onMouseEnter={e => e.currentTarget.style.opacity = '0.8'}
+                                    onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+                                >
+                                    {user?.nombre?.[0]?.toUpperCase() || 'D'}
+                                </div>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ fontSize: 13, fontWeight: 800, color: t.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user?.nombre || 'Docente'}</div>
+                                    <div style={{ fontSize: 11, color: t.subtext }}>Código: {user?.codigo_clase || '—'}</div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                    {collapsed && (
+                        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8, paddingBottom: 8, borderBottom: '1px solid rgba(0,0,0,0.08)' }}>
+                            <div onClick={() => setModalPerfil(true)} title="Ver perfil" style={{ cursor: 'pointer', width: 36, height: 36, borderRadius: '50%', background: C.yellow, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: 15, color: C.dark }}>
                                 {user?.nombre?.[0]?.toUpperCase() || 'D'}
                             </div>
-                            <div>
-                                <div style={{ fontSize: 13, fontWeight: 800, color: t.text }}>{user?.nombre || 'Docente'}</div>
-                                <div style={{ fontSize: 11, color: t.subtext }}>Código: {user?.codigo_clase || '—'}</div>
+                        </div>
+                    )}
+                    {NAV.map((item) => {
+                        const isActive = active === item.id;
+                        return (
+                            <button key={item.id} onClick={() => onNav(item.id)} style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: collapsed ? '13px 0' : '13px 20px', justifyContent: collapsed ? 'center' : 'flex-start', background: isActive ? t.activeItem : 'transparent', border: 'none', borderLeft: isActive && !collapsed ? `4px solid ${t.activeBorder}` : '4px solid transparent', borderRadius: collapsed ? 0 : '0 12px 12px 0', cursor: 'pointer', transition: 'all 0.15s', position: 'relative' }}>
+                                <span style={{ fontSize: 18, lineHeight: 1, flexShrink: 0 }}>{item.icon}</span>
+                                {!collapsed && <span style={{ fontSize: 14, fontWeight: isActive ? 800 : 600, color: isActive ? t.text : t.subtext, fontFamily: 'Nunito' }}>{item.label}</span>}
+                            </button>
+                        );
+                    })}
+                </nav>
+            </div>
+
+            {/* Modal de perfil */}
+            {modalPerfil && (
+                <div onClick={() => { setModalPerfil(false); setEditandoNombre(false); }} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', backdropFilter: 'blur(2px)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 20, width: 340, boxShadow: '0 20px 60px rgba(0,0,0,0.2)', overflow: 'hidden' }}>
+                        {/* Header */}
+                        <div style={{ background: `linear-gradient(135deg, ${C.yellow}, #f5a623)`, padding: '28px 24px 24px', textAlign: 'center', position: 'relative' }}>
+                            <button onClick={() => { setModalPerfil(false); setEditandoNombre(false); }} style={{ position: 'absolute', top: 12, right: 14, background: 'rgba(255,255,255,0.3)', border: 'none', borderRadius: 8, width: 28, height: 28, cursor: 'pointer', fontSize: 16, fontWeight: 900, color: C.dark, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+                            <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'rgba(255,255,255,0.35)', margin: '0 auto 12px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28, fontWeight: 900, color: C.dark }}>
+                                {user?.nombre?.[0]?.toUpperCase() || 'D'}
                             </div>
+                            <div style={{ fontSize: 18, fontWeight: 900, color: C.dark }}>{user?.nombre || 'Docente'}</div>
+                            <div style={{ fontSize: 12, color: 'rgba(0,0,0,0.5)', fontWeight: 600, marginTop: 3 }}>{user?.email || ''}</div>
+                        </div>
+
+                        {/* Cuerpo */}
+                        <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                            <div style={{ background: '#f8f8f8', borderRadius: 10, padding: '10px 14px' }}>
+                                <div style={{ fontSize: 11, fontWeight: 800, color: '#aaa', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 3 }}>Código de clase</div>
+                                <div style={{ fontSize: 18, fontWeight: 900, letterSpacing: 2, color: C.blue, fontFamily: 'monospace' }}>{user?.codigo_clase || '—'}</div>
+                            </div>
+
+                            {editandoNombre ? (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                    <label style={{ fontSize: 12, fontWeight: 800, color: '#555' }}>Nuevo nombre</label>
+                                    <input
+                                        value={nuevoNombre}
+                                        onChange={e => setNuevoNombre(e.target.value)}
+                                        onKeyDown={e => { if (e.key === 'Enter') guardarNombre(); if (e.key === 'Escape') setEditandoNombre(false); }}
+                                        autoFocus
+                                        style={{ padding: '10px 14px', borderRadius: 10, border: `1.5px solid ${C.blue}`, fontSize: 14, fontFamily: 'Nunito', fontWeight: 600, outline: 'none' }}
+                                    />
+                                    <div style={{ display: 'flex', gap: 8 }}>
+                                        <button onClick={guardarNombre} disabled={guardandoNombre} style={{ flex: 1, background: C.green, color: '#fff', border: 'none', borderRadius: 10, padding: '10px', fontSize: 13, fontWeight: 800, cursor: 'pointer', fontFamily: 'Nunito' }}>
+                                            {guardandoNombre ? 'Guardando…' : '✓ Guardar'}
+                                        </button>
+                                        <button onClick={() => setEditandoNombre(false)} style={{ flex: 1, background: '#eee', color: '#555', border: 'none', borderRadius: 10, padding: '10px', fontSize: 13, fontWeight: 800, cursor: 'pointer', fontFamily: 'Nunito' }}>
+                                            Cancelar
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <button onClick={iniciarEdicion} style={{ background: C.blue + '12', border: `1.5px solid ${C.blue}33`, borderRadius: 10, padding: '11px', fontSize: 13, fontWeight: 800, color: C.blue, cursor: 'pointer', fontFamily: 'Nunito', width: '100%' }}>
+                                    Editar nombre
+                                </button>
+                            )}
+
+                            <button onClick={() => { setModalPerfil(false); onLogout(); }} style={{ background: '#FEE', border: `1.5px solid ${C.red}33`, borderRadius: 10, padding: '11px', fontSize: 13, fontWeight: 800, color: C.red, cursor: 'pointer', fontFamily: 'Nunito', width: '100%' }}>
+                                Cerrar sesión
+                            </button>
                         </div>
                     </div>
-                )}
-                {NAV.map((item) => {
-                    const isActive = active === item.id;
-                    return (
-                        <button key={item.id} onClick={() => onNav(item.id)} style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: collapsed ? '13px 0' : '13px 20px', justifyContent: collapsed ? 'center' : 'flex-start', background: isActive ? t.activeItem : 'transparent', border: 'none', borderLeft: isActive && !collapsed ? `4px solid ${t.activeBorder}` : '4px solid transparent', borderRadius: collapsed ? 0 : '0 12px 12px 0', cursor: 'pointer', transition: 'all 0.15s', position: 'relative' }}>
-                            <span style={{ fontSize: 18, lineHeight: 1, flexShrink: 0 }}>{item.icon}</span>
-                            {!collapsed && <span style={{ fontSize: 14, fontWeight: isActive ? 800 : 600, color: isActive ? t.text : t.subtext, fontFamily: 'Nunito' }}>{item.label}</span>}
-                        </button>
-                    );
-                })}
-            </nav>
-        </div>
+                </div>
+            )}
+        </>
     );
 }
 
@@ -106,6 +204,10 @@ const nivelLabel = (n) => ({ 'FÁCIL': 'Básico', 'MEDIA': 'Intermedio', 'DIFÍC
 function ProgresoContent({ students, loadingStudents, resumen, loadingResumen, progresoActs, loadingProgreso, onActualizarResumen }) {
     const { card } = THEME;
     const [alumnoDetalle, setAlumnoDetalle] = useState(null);
+    const [busqueda, setBusqueda] = useState('');
+    const [ordenDesc, setOrdenDesc] = useState(true);
+    const [verGrafico1, setVerGrafico1] = useState(false);
+    const [verGrafico2, setVerGrafico2] = useState(false);
 
     const totalAlumnos = students.length;
     const promedioGlobal = progresoActs.length
@@ -120,7 +222,6 @@ function ProgresoContent({ students, loadingStudents, resumen, loadingResumen, p
             ? Math.round(activas.reduce((sum, al) => sum + al.porcentaje_aciertos, 0) / activas.length)
             : null;
         const nivel = activas.length ? activas.at(-1).nivel_alcanzado : null;
-        // Para cada actividad: buscar el intento actual del alumno en progresoActs
         const detallePorActividad = progresoActs.map(act => {
             const dato = act.alumnos.find(al => al.nombre === s.nombre);
             return dato ? { titulo: act.titulo, actividad_id: act.actividad_id, ...dato } : null;
@@ -128,7 +229,18 @@ function ProgresoContent({ students, loadingStudents, resumen, loadingResumen, p
         return { ...s, promedio, nivel, activas: activas.length, detallePorActividad };
     });
 
-    // Métricas para los 4 stat cards
+    // Filtrado por búsqueda
+    const alumnosFiltrados = alumnosConStats
+        .filter(s => {
+            const nombreCompleto = `${s.nombre}${s.apellido ? ' ' + s.apellido : ''}`.toLowerCase();
+            return nombreCompleto.includes(busqueda.toLowerCase());
+        })
+        .sort((a, b) => {
+            const pa = a.promedio ?? -1;
+            const pb = b.promedio ?? -1;
+            return ordenDesc ? pb - pa : pa - pb;
+        });
+
     const necesitanAtencion = alumnosConStats.filter(a => a.promedio !== null && a.promedio < 50).length;
 
     // Distribución de promedios por franja (reemplaza la distribución de niveles, que dependía
@@ -178,7 +290,7 @@ function ProgresoContent({ students, loadingStudents, resumen, loadingResumen, p
                     color={necesitanAtencion > 0 ? C.red : C.pink}
                 />
                 <StatCard
-                    label="Promedio global"
+                    label="Rendimiento general"
                     value={promedioGlobal !== null ? `${promedioGlobal}%` : '—'}
                     icon="⭐"
                     color={C.yellow}
@@ -187,141 +299,205 @@ function ProgresoContent({ students, loadingStudents, resumen, loadingResumen, p
                 <StatCard label="Actividades publicadas" value={progresoActs.length} icon="📖" color={C.green} />
             </div>
 
-            {/* ── Promedio por actividad + Distribución de promedios por alumno ── */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 24 }}>
+            {/* ── Botón Ver gráficos + Drawer ── */}
+            <div style={{ marginBottom: 20 }}>
+                <button
+                    onClick={() => setVerGrafico1(v => !v)}
+                    style={{ background: verGrafico1 ? C.pink : '#fff', border: `1.5px solid ${verGrafico1 ? C.pink : 'rgba(0,0,0,0.12)'}`, borderRadius: 12, padding: '9px 18px', fontSize: 13, fontWeight: 800, color: verGrafico1 ? '#fff' : THEME.subtext, cursor: 'pointer', fontFamily: 'Nunito', display: 'flex', alignItems: 'center', gap: 8 }}
+                >
+                    <span style={{ fontSize: 15 }}>{verGrafico1 ? '▲' : '▼'}</span>
+                    {verGrafico1 ? 'Ocultar gráficos' : 'Ver gráficos'}
+                </button>
 
-                {/* Promedio de aciertos por actividad */}
-                <div style={{ background: card.bg, borderRadius: card.radius, boxShadow: card.shadow, padding: '22px 24px' }}>
-                    <h2 style={{ fontSize: 15, fontWeight: 800, color: THEME.heading, marginBottom: 2 }}>Promedio por actividad</h2>
-                    <p style={{ fontSize: 12, color: THEME.subtext, marginBottom: 20 }}>¿Qué actividad les resultó más difícil?</p>
-                    {loadingProgreso
-                        ? <div style={{ height: H + 40, display: 'flex', alignItems: 'center', justifyContent: 'center', color: THEME.subtext, fontSize: 13 }}>Cargando datos…</div>
-                        : progresoActs.length === 0
-                            ? <div style={{ height: H + 40, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#bbb', fontSize: 13 }}>Sin actividades publicadas aún</div>
-                            : (
-                                <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', height: H + 40 }}>
-                                    {progresoActs.map((act) => {
-                                        const pct = Math.round(act.promedio_aciertos_clase);
-                                        const barH = pct === 0 ? 4 : Math.max(16, (pct / maxPromActividad) * H);
-                                        const color = pct >= 70 ? C.green : pct >= 50 ? C.yellow : C.red;
+                {verGrafico1 && (
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginTop: 16 }}>
+
+                        {/* Promedio por actividad */}
+                        <div style={{ background: card.bg, borderRadius: card.radius, boxShadow: card.shadow, padding: '22px 24px' }}>
+                            <h2 style={{ fontSize: 15, fontWeight: 800, color: THEME.heading, marginBottom: 20 }}>Promedio por actividad</h2>
+                            {loadingProgreso
+                                ? <div style={{ height: H + 40, display: 'flex', alignItems: 'center', justifyContent: 'center', color: THEME.subtext, fontSize: 13 }}>Cargando datos…</div>
+                                : progresoActs.length === 0
+                                    ? <div style={{ height: H + 40, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#bbb', fontSize: 13 }}>Sin actividades publicadas aún</div>
+                                    : (
+                                        <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', height: H + 40 }}>
+                                            {progresoActs.map((act, idx) => {
+                                                const pct = Math.round(act.promedio_aciertos_clase);
+                                                const barH = pct === 0 ? 4 : Math.max(16, (pct / maxPromActividad) * H);
+                                                const color = pct >= 70 ? C.green : pct >= 50 ? C.yellow : C.red;
+                                                return (
+                                                    <div key={act.actividad_id} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                                                        <div style={{ fontSize: 12, fontWeight: 900, color }}>{pct}%</div>
+                                                        <div style={{ width: '100%', height: H, display: 'flex', alignItems: 'flex-end', background: 'rgba(0,0,0,0.04)', borderRadius: 8, overflow: 'hidden' }}>
+                                                            <div style={{ width: '100%', height: barH, background: color, borderRadius: '6px 6px 0 0', transition: 'height 0.8s', opacity: 0.85 }} />
+                                                        </div>
+                                                        <div style={{ fontSize: 10.5, color: THEME.subtext, textAlign: 'center', fontWeight: 600, whiteSpace: 'nowrap' }}>Act. {idx + 1}</div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )
+                            }
+                        </div>
+
+                        {/* Distribución de promedios — rosca */}
+                        <div style={{ background: card.bg, borderRadius: card.radius, boxShadow: card.shadow, padding: '22px 24px' }}>
+                            <h2 style={{ fontSize: 15, fontWeight: 800, color: THEME.heading, marginBottom: 20 }}>Distribución de promedios</h2>
+                            {loadingProgreso
+                                ? <div style={{ height: H + 40, display: 'flex', alignItems: 'center', justifyContent: 'center', color: THEME.subtext, fontSize: 13 }}>Cargando datos…</div>
+                                : !alumnosConStats.some(a => a.promedio !== null)
+                                    ? <div style={{ height: H + 40, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#bbb', fontSize: 13 }}>Sin datos aún</div>
+                                    : (() => {
+                                        const sinActividad = alumnosConStats.filter(a => a.promedio === null).length;
+                                        const totalAlumnosRosca = alumnosConStats.length;
+                                        const todasFranjas = [
+                                            ...franjasData,
+                                            { key: 'sin', label: 'Sin actividad', color: '#ccc', bg: '#f5f5f5', cant: sinActividad },
+                                        ];
+                                        const r = 54, stroke = 22, cx = 80, cy = 80;
+                                        const circ = 2 * Math.PI * r;
+                                        let offset = 0;
+                                        const segmentos = todasFranjas.map(f => {
+                                            const dash = (f.cant / totalAlumnosRosca) * circ;
+                                            const seg = { ...f, dash, offset };
+                                            offset += dash;
+                                            return seg;
+                                        });
                                         return (
-                                            <div key={act.actividad_id} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, minWidth: 0 }}>
-                                                <div style={{ fontSize: 12, fontWeight: 900, color }}>{pct}%</div>
-                                                <div style={{ width: '100%', height: H, display: 'flex', alignItems: 'flex-end', background: 'rgba(0,0,0,0.04)', borderRadius: 8, overflow: 'hidden' }}>
-                                                    <div style={{ width: '100%', height: barH, background: color, borderRadius: '6px 6px 0 0', transition: 'height 0.8s', opacity: 0.85 }} />
+                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
+                                                <svg width={160} height={160}>
+                                                    <circle cx={cx} cy={cy} r={r} fill="none" stroke="rgba(0,0,0,0.06)" strokeWidth={stroke} />
+                                                    {segmentos.map((seg) => seg.cant === 0 ? null : (
+                                                        <circle key={seg.key} cx={cx} cy={cy} r={r} fill="none"
+                                                            stroke={seg.color} strokeWidth={stroke} strokeOpacity={0.85}
+                                                            strokeDasharray={`${seg.dash} ${circ - seg.dash}`}
+                                                            strokeDashoffset={circ / 4 - seg.offset}
+                                                            style={{ transition: 'stroke-dasharray 0.8s' }}
+                                                        />
+                                                    ))}
+                                                    <text x={cx} y={cy - 6} textAnchor="middle" fontSize={22} fontWeight={900} fill={THEME.heading}>{totalAlumnosRosca}</text>
+                                                    <text x={cx} y={cy + 14} textAnchor="middle" fontSize={11} fontWeight={700} fill={THEME.subtext}>alumnos</text>
+                                                </svg>
+                                                <div style={{ display: 'flex', gap: 16, justifyContent: 'center', flexWrap: 'wrap', width: '100%' }}>
+                                                    {todasFranjas.filter(f => f.key !== 'sin' || f.cant > 0).map(f => (
+                                                        <div key={f.key} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                            <div style={{ width: 10, height: 10, borderRadius: '50%', background: f.color, flexShrink: 0 }} />
+                                                            <span style={{ fontSize: 12, fontWeight: 800, color: THEME.heading }}>{f.label}</span>
+                                                            <span style={{ fontSize: 13, fontWeight: 900, color: f.color }}>{f.cant}</span>
+                                                        </div>
+                                                    ))}
                                                 </div>
-                                                <div style={{ fontSize: 10.5, color: THEME.subtext, textAlign: 'center', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', width: '100%' }} title={act.titulo}>{act.titulo}</div>
                                             </div>
                                         );
-                                    })}
-                                </div>
-                            )
-                    }
-                </div>
-
-                {/* Distribución de promedios por franja */}
-                <div style={{ background: card.bg, borderRadius: card.radius, boxShadow: card.shadow, padding: '22px 24px' }}>
-                    <h2 style={{ fontSize: 15, fontWeight: 800, color: THEME.heading, marginBottom: 2 }}>Distribución de promedios</h2>
-                    <p style={{ fontSize: 12, color: THEME.subtext, marginBottom: 20 }}>¿Cuántos alumnos están en cada franja?</p>
-                    {loadingProgreso
-                        ? <div style={{ height: H + 40, display: 'flex', alignItems: 'center', justifyContent: 'center', color: THEME.subtext, fontSize: 13 }}>Cargando datos…</div>
-                        : !alumnosConStats.some(a => a.promedio !== null)
-                            ? <div style={{ height: H + 40, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#bbb', fontSize: 13 }}>Sin datos aún</div>
-                            : (
-                                <div style={{ display: 'flex', gap: 16, alignItems: 'flex-end', height: H + 40 }}>
-                                    {franjasData.map((f) => {
-                                        const barH = f.cant === 0 ? 4 : Math.max(16, (f.cant / maxFranja) * H);
-                                        return (
-                                            <div key={f.key} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-                                                <div style={{ fontSize: 13, fontWeight: 900, color: f.color }}>{f.cant}</div>
-                                                <div style={{ width: '100%', height: H, display: 'flex', alignItems: 'flex-end', background: 'rgba(0,0,0,0.04)', borderRadius: 10, overflow: 'hidden' }}>
-                                                    <div style={{ width: '100%', height: barH, background: f.color, borderRadius: '8px 8px 0 0', transition: 'height 0.8s', opacity: 0.85 }} />
-                                                </div>
-                                                <div style={{ fontSize: 12, fontWeight: 800, padding: '3px 10px', borderRadius: 20, background: f.bg, color: f.color }}>{f.label}</div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            )
-                    }
-                </div>
+                                    })()
+                            }
+                        </div>
+                    </div>
+                )}
             </div>
 
             {/* ── Tabla de alumnos ── */}
             <div style={{ background: card.bg, borderRadius: card.radius, boxShadow: card.shadow, padding: '22px 24px' }}>
-                <h2 style={{ fontSize: 15, fontWeight: 800, color: THEME.heading, marginBottom: 2 }}>Desempeño por alumno</h2>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
+                    <h2 style={{ fontSize: 15, fontWeight: 800, color: THEME.heading, margin: 0 }}>Desempeño por alumno</h2>
+                    <input
+                        value={busqueda}
+                        onChange={e => setBusqueda(e.target.value)}
+                        placeholder="Buscar alumno…"
+                        style={{ padding: '7px 12px', borderRadius: 10, border: '1.5px solid rgba(0,0,0,0.12)', fontSize: 13, fontFamily: 'Nunito', fontWeight: 600, outline: 'none', background: '#fff', width: 180 }}
+                    />
+                </div>
 
                 {loadingStudents || loadingProgreso
                     ? <div style={{ padding: '20px 0', textAlign: 'center', color: THEME.subtext }}>Cargando…</div>
                     : alumnosConStats.length === 0
                         ? <div style={{ padding: '20px 0', textAlign: 'center', color: THEME.subtext }}>No hay alumnos en la clase todavía.</div>
-                        : (
-                            <>
-                                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1.6fr 100px', gap: 12, padding: '8px 14px', borderRadius: 8, background: 'rgba(0,0,0,0.04)', marginBottom: 6 }}>
-                                    {['Alumno', 'Actividades', 'Promedio', ''].map((h, i) => (
-                                        <span key={i} style={{ fontSize: 11, fontWeight: 800, color: THEME.subtext, textTransform: 'uppercase', letterSpacing: 0.5 }}>{h}</span>
-                                    ))}
-                                </div>
+                        : alumnosFiltrados.length === 0
+                            ? <div style={{ padding: '20px 0', textAlign: 'center', color: THEME.subtext }}>No se encontró ningún alumno con ese nombre.</div>
+                            : (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                    {/* Header de columnas */}
+                                    <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr auto', gap: 12, padding: '6px 14px', borderRadius: 8, background: 'rgba(0,0,0,0.04)', alignItems: 'center' }}>
+                                        <span style={{ fontSize: 11, fontWeight: 800, color: THEME.subtext, textTransform: 'uppercase', letterSpacing: 0.5 }}>Alumno</span>
+                                        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${progresoActs.length}, 1fr)`, gap: 6 }}>
+                                            {progresoActs.map((act, i) => (
+                                                <span key={act.actividad_id} style={{ fontSize: 10, fontWeight: 800, color: THEME.subtext, textTransform: 'uppercase', letterSpacing: 0.4, textAlign: 'center', display: 'block' }} title={act.titulo}>Act. {i + 1}</span>
+                                            ))}
+                                        </div>
+                                        <button onClick={() => setOrdenDesc(o => !o)} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3, whiteSpace: 'nowrap' }}>
+                                            <span style={{ fontSize: 11, fontWeight: 800, color: THEME.subtext, textTransform: 'uppercase', letterSpacing: 0.5 }}>Promedio</span>
+                                            <span style={{ fontSize: 16, color: C.blue, fontWeight: 900 }}>{ordenDesc ? '↓' : '↑'}</span>
+                                        </button>
+                                    </div>
 
-                                {alumnosConStats.map((s) => {
-                                    const sinAct = s.promedio === null;
-                                    const alert = !sinAct && s.promedio < 50;
-                                    const color = sinAct ? THEME.subtext : s.promedio >= 70 ? C.green : s.promedio >= 50 ? C.yellow : C.red;
+                                    {alumnosFiltrados.map((s) => {
+                                        const sinAct = s.promedio === null;
+                                        const promedioColor = sinAct ? THEME.subtext : s.promedio >= 70 ? C.green : s.promedio >= 50 ? C.yellow : C.red;
+                                        const nivelCfg = {
+                                            'FÁCIL': { label: 'Básico', bg: '#FEECEC', color: C.red },
+                                            'MEDIA': { label: 'Intermedio', bg: '#FFF8E1', color: C.yellow },
+                                            'DIFÍCIL': { label: 'Avanzado', bg: '#E8F5EB', color: C.green },
+                                        }[s.nivel] || null;
 
-                                    return (
-                                        <div key={s.id} style={{
-                                            display: 'grid', gridTemplateColumns: '2fr 1fr 1.6fr 100px', gap: 12,
-                                            padding: '12px 14px', borderRadius: 10, alignItems: 'center',
-                                            borderBottom: '1px solid rgba(0,0,0,0.04)',
-                                            background: sinAct ? 'rgba(255,31,54,0.03)' : 'transparent',
-                                            borderLeft: sinAct ? `3px solid ${C.red}55` : alert ? `3px solid ${C.red}` : '3px solid transparent',
-                                        }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                                <div style={{ width: 34, height: 34, borderRadius: '50%', background: alert || sinAct ? C.red + '20' : C.blue + '18', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: 13, color: alert || sinAct ? C.red : C.blue, flexShrink: 0 }}>
-                                                    {s.nombre[0].toUpperCase()}
+                                        return (
+                                            <div key={s.id} style={{
+                                                display: 'grid', gridTemplateColumns: '220px 1fr auto', gap: 12,
+                                                padding: '14px', borderRadius: 14, alignItems: 'center',
+                                                background: '#fff',
+                                                boxShadow: '0 1px 6px rgba(0,0,0,0.06)',
+                                                borderLeft: sinAct ? `4px solid ${C.red}55` : s.promedio < 50 ? `4px solid ${C.red}` : s.promedio < 70 ? `4px solid ${C.yellow}` : `4px solid ${C.green}`,
+                                            }}>
+                                                {/* Col 1: avatar + nombre + nivel */}
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                                                    <div style={{ width: 38, height: 38, borderRadius: '50%', background: sinAct ? C.red + '18' : C.blue + '18', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: 14, color: sinAct ? C.red : C.blue, flexShrink: 0 }}>
+                                                        {s.nombre[0].toUpperCase()}
+                                                    </div>
+                                                    <div style={{ minWidth: 0 }}>
+                                                        <div style={{ fontSize: 13.5, fontWeight: 800, color: THEME.heading, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.nombre}{s.apellido ? ` ${s.apellido}` : ''}</div>
+                                                        {sinAct
+                                                            ? <div style={{ fontSize: 11, fontWeight: 700, color: C.red }}>Sin actividad ⚠️</div>
+                                                            : nivelCfg && <span style={{ fontSize: 10.5, fontWeight: 800, padding: '2px 8px', borderRadius: 20, background: nivelCfg.bg, color: nivelCfg.color }}>{nivelCfg.label}</span>
+                                                        }
+                                                    </div>
                                                 </div>
-                                                <div>
-                                                    <div style={{ fontSize: 13.5, fontWeight: 700, color: THEME.heading }}>{s.nombre}</div>
-                                                    {sinAct && <div style={{ fontSize: 11, fontWeight: 700, color: C.red }}>Sin actividad aún ⚠️</div>}
-                                                </div>
-                                            </div>
 
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                                <span style={{ fontSize: 12.5, color: THEME.subtext, fontWeight: 600 }}>{s.activas} / {progresoActs.length}</span>
-                                                <div style={{ display: 'flex', gap: 3 }}>
-                                                    {progresoActs.map((act, i) => {
+                                                {/* Col 2: pill por actividad */}
+                                                <div style={{ display: 'grid', gridTemplateColumns: `repeat(${progresoActs.length}, 1fr)`, gap: 6, alignItems: 'center' }}>
+                                                    {progresoActs.map((act) => {
                                                         const dato = act.alumnos.find(al => al.nombre === s.nombre);
                                                         const hecho = dato && dato.respondidas > 0;
-                                                        return <div key={i} style={{ width: 8, height: 8, borderRadius: '50%', background: hecho ? C.green : 'rgba(0,0,0,0.12)' }} title={act.titulo} />;
+                                                        const pct = hecho ? Math.round(dato.porcentaje_aciertos) : null;
+                                                        const nivelAct = hecho ? dato.nivel_alcanzado : null;
+                                                        const pColor = pct === null ? '#ccc' : pct >= 70 ? C.green : pct >= 50 ? C.yellow : C.red;
+                                                        const pBg = pct === null ? '#f5f5f5' : pct >= 70 ? '#E8F5EB' : pct >= 50 ? '#FFF8E1' : '#FEECEC';
+                                                        const nivelActCfg = { 'FÁCIL': 'Básico', 'MEDIA': 'Inter.', 'DIFÍCIL': 'Avanz.' }[nivelAct] || null;
+                                                        return (
+                                                            <div key={act.actividad_id} style={{ background: pBg, borderRadius: 10, padding: '6px 8px', textAlign: 'center' }}>
+                                                                <div style={{ fontSize: 13, fontWeight: 900, color: pColor }}>{pct !== null ? `${pct}%` : '—'}</div>
+                                                                {nivelActCfg && <div style={{ fontSize: 9.5, fontWeight: 700, color: pColor, marginTop: 1 }}>{nivelActCfg}</div>}
+                                                            </div>
+                                                        );
                                                     })}
                                                 </div>
-                                            </div>
 
-                                            <div>
-                                                {!sinAct
-                                                    ? <>
-                                                        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 4 }}>
-                                                            <span style={{ fontSize: 12, fontWeight: 900, color }}>{s.promedio}%</span>
-                                                        </div>
-                                                        <div style={{ height: 7, borderRadius: 8, background: 'rgba(0,0,0,0.07)', overflow: 'hidden' }}>
-                                                            <div style={{ height: '100%', width: `${s.promedio}%`, background: color, borderRadius: 8, transition: 'width 0.8s' }} />
-                                                        </div>
-                                                    </>
-                                                    : <span style={{ fontSize: 12, color: THEME.subtext, fontWeight: 600 }}>—</span>
-                                                }
+                                                {/* Col 3: promedio global + botón */}
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                                                    <div style={{ textAlign: 'center', minWidth: 48 }}>
+                                                        <div style={{ fontSize: 16, fontWeight: 900, color: promedioColor }}>{sinAct ? '—' : `${s.promedio}%`}</div>
+                                                        <div style={{ fontSize: 10, color: THEME.subtext, fontWeight: 600 }}>promedio</div>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => setAlumnoDetalle({ alumno: s, actividadIdx: 0 })}
+                                                        style={{ background: C.blue, border: 'none', borderRadius: 10, padding: '8px 14px', fontSize: 12, fontWeight: 800, color: '#fff', cursor: 'pointer', fontFamily: 'Nunito', whiteSpace: 'nowrap' }}
+                                                    >
+                                                        Ver detalle
+                                                    </button>
+                                                </div>
                                             </div>
-
-                                            <button
-                                                onClick={() => setAlumnoDetalle({ alumno: s, actividadIdx: 0 })}
-                                                style={{ background: C.blue, border: 'none', borderRadius: 10, padding: '7px 0', fontSize: 12, fontWeight: 800, color: '#fff', cursor: 'pointer', fontFamily: 'Nunito', width: '100%' }}
-                                            >
-                                                Ver detalle
-                                            </button>
-                                        </div>
-                                    );
-                                })}
-                            </>
-                        )
+                                        );
+                                    })}
+                                </div>
+                            )
                 }
             </div>
 
@@ -340,31 +516,183 @@ function ProgresoContent({ students, loadingStudents, resumen, loadingResumen, p
 
 
 // ══════════════════════════════════════════════════════════════
-// MODAL DE DETALLE DE ALUMNO — intentos + preguntas
+// MODAL DE DETALLE DE ALUMNO — resumen + detalle por actividad
 // ══════════════════════════════════════════════════════════════
 function AlumnoDetalleModal({ alumno, actividadIdx, progresoActs, onClose }) {
-    const [actIdx, setActIdx] = useState(actividadIdx);
-    const [intentoSel, setIntentoSel] = useState(0); // índice del intento seleccionado
+    // actSelIdx = null → pantalla resumen; número → detalle de esa actividad
+    const [actSelIdx, setActSelIdx] = useState(null);
+    const [intentoSel, setIntentoSel] = useState(0);
     const [datos, setDatos] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
-    const actividadActual = progresoActs[actIdx];
-
     useEffect(() => {
-        if (!actividadActual) return;
+        if (actSelIdx === null) { setDatos(null); return; }
+        const act = progresoActs[actSelIdx];
+        if (!act) return;
         setLoading(true);
         setDatos(null);
         setIntentoSel(0);
         setError('');
-        getProgresoAlumno(alumno.id, actividadActual.actividad_id)
+        getProgresoAlumno(alumno.id, act.actividad_id)
             .then(d => setDatos(d))
             .catch(() => setError('No se pudo cargar el detalle.'))
             .finally(() => setLoading(false));
-    }, [actIdx, actividadActual?.actividad_id]);
+    }, [actSelIdx]);
 
     const intentos = datos?.intentos || [];
     const intentoData = intentos[intentoSel] || null;
+
+    // ── Pantalla resumen (actSelIdx === null) ──────────────────
+    const PantallaResumen = () => (
+        <div style={{ flex: 1, overflowY: 'auto', padding: '24px 26px' }}>
+            <div style={{ fontSize: 12, fontWeight: 800, color: THEME.subtext, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 16 }}>
+                Resumen de actividades
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {progresoActs.map((act, i) => {
+                    const datoAct = act.alumnos?.find(al => al.nombre === alumno.nombre);
+                    const hecho = datoAct && datoAct.respondidas > 0;
+                    const pct = hecho ? Math.round(datoAct.porcentaje_aciertos) : null;
+                    const nivel = hecho ? datoAct.nivel_alcanzado : null;
+                    const pColor = pct === null ? THEME.subtext : pct >= 70 ? C.green : pct >= 50 ? C.yellow : C.red;
+                    const pBg = pct === null ? '#f5f5f5' : pct >= 70 ? '#E8F5EB' : pct >= 50 ? '#FFF8E1' : '#FEECEC';
+                    const nivelCfg = { 'FÁCIL': { label: 'Básico', bg: '#FEECEC', color: C.red }, 'MEDIA': { label: 'Intermedio', bg: '#FFF8E1', color: C.yellow }, 'DIFÍCIL': { label: 'Avanzado', bg: '#E8F5EB', color: C.green } }[nivel] || null;
+
+                    // intentos desde progresoActs (resumen por intento si está disponible)
+                    const intentosResumen = datoAct?.intentos_resumen || [];
+
+                    return (
+                        <button key={i} onClick={() => setActSelIdx(i)} style={{
+                            display: 'flex', alignItems: 'center', gap: 16,
+                            padding: '14px 18px', borderRadius: 14, border: '1.5px solid rgba(0,0,0,0.08)',
+                            background: '#fff', cursor: 'pointer', fontFamily: 'Nunito', textAlign: 'left',
+                            boxShadow: '0 1px 4px rgba(0,0,0,0.05)', transition: 'box-shadow 0.15s',
+                            borderLeft: `4px solid ${pColor}`,
+                        }}>
+                            {/* Número + título */}
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontSize: 10, fontWeight: 800, color: THEME.subtext, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 3 }}>Act. {i + 1}</div>
+                                <div style={{ fontSize: 14, fontWeight: 800, color: THEME.heading, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{act.titulo}</div>
+                                {!hecho && <div style={{ fontSize: 11, fontWeight: 700, color: C.red, marginTop: 3 }}>Sin actividad ⚠️</div>}
+                            </div>
+
+                            {/* Nivel */}
+                            {nivelCfg && (
+                                <span style={{ fontSize: 11, fontWeight: 800, padding: '3px 10px', borderRadius: 20, background: nivelCfg.bg, color: nivelCfg.color, flexShrink: 0 }}>
+                                    {nivelCfg.label}
+                                </span>
+                            )}
+
+                            {/* Promedio grande */}
+                            <div style={{ background: pBg, borderRadius: 12, padding: '8px 14px', textAlign: 'center', flexShrink: 0, minWidth: 62 }}>
+                                <div style={{ fontSize: 18, fontWeight: 900, color: pColor }}>{pct !== null ? `${pct}%` : '—'}</div>
+                                <div style={{ fontSize: 10, fontWeight: 700, color: pColor, opacity: 0.75 }}>promedio</div>
+                            </div>
+
+                            {/* Flecha */}
+                            <div style={{ fontSize: 18, color: THEME.subtext, flexShrink: 0 }}>›</div>
+                        </button>
+                    );
+                })}
+            </div>
+        </div>
+    );
+
+    // ── Pantalla detalle de una actividad ──────────────────────
+    const PantallaDetalle = () => (
+        <div style={{ flex: 1, overflowY: 'auto', padding: '24px 26px' }}>
+            {/* Botón volver */}
+            <button onClick={() => { setActSelIdx(null); setDatos(null); }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 800, color: C.blue, fontFamily: 'Nunito', marginBottom: 18, padding: 0, display: 'flex', alignItems: 'center', gap: 4 }}>
+                ‹ Volver al resumen
+            </button>
+
+            {loading && <div style={{ textAlign: 'center', padding: '40px 0', color: THEME.subtext }}>Cargando…</div>}
+            {error && <div style={{ background: '#FEE', border: `1.5px solid ${C.red}`, borderRadius: 12, padding: '12px 16px', color: C.red, fontWeight: 700 }}>⚠️ {error}</div>}
+
+            {datos && (
+                <>
+                    {intentos.length === 0 ? (
+                        <div style={{ textAlign: 'center', padding: '40px 0', color: THEME.subtext }}>
+                            <div style={{ fontWeight: 700 }}>Este alumno aún no realizó esta actividad.</div>
+                        </div>
+                    ) : (
+                        <>
+                            {/* Cards de intentos */}
+                            <div style={{ marginBottom: 24 }}>
+                                <div style={{ fontSize: 12, fontWeight: 800, color: THEME.subtext, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 12 }}>
+                                    Intentos realizados · {intentos.length} de 3
+                                </div>
+                                <div style={{ display: 'flex', gap: 12, alignItems: 'stretch' }}>
+                                    {intentos.map((it, i) => {
+                                        const col = it.porcentaje_aciertos >= 70 ? C.green : it.porcentaje_aciertos >= 50 ? C.yellow : C.red;
+                                        const niv = nivelLabel(it.nivel_alcanzado);
+                                        const sel = intentoSel === i;
+                                        return (
+                                            <button key={i} onClick={() => setIntentoSel(i)} style={{
+                                                flex: 1, border: `2px solid ${sel ? C.blue : 'rgba(0,0,0,0.08)'}`,
+                                                borderRadius: 14, padding: '14px 16px', background: sel ? C.blueLight : '#fff',
+                                                cursor: 'pointer', fontFamily: 'Nunito', textAlign: 'left',
+                                                transition: 'all 0.15s', boxShadow: sel ? `0 0 0 3px ${C.blue}22` : 'none',
+                                            }}>
+                                                <div style={{ fontSize: 11, fontWeight: 800, color: sel ? C.blue : THEME.subtext, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 6 }}>Intento {it.numero}</div>
+                                                <div style={{ fontSize: 22, fontWeight: 900, color: col, lineHeight: 1, marginBottom: 4 }}>{it.porcentaje_aciertos}%</div>
+                                                <div style={{ fontSize: 11, fontWeight: 700, color: THEME.subtext, marginBottom: 8 }}>{it.correctas}/{it.respondidas} correctas</div>
+                                                <span style={{ fontSize: 11, fontWeight: 800, padding: '2px 8px', borderRadius: 20, background: levelBg(niv), color: levelColor(niv) }}>{niv}</span>
+                                                {it.completado && <div style={{ fontSize: 11, color: C.green, fontWeight: 700, marginTop: 6 }}>✓ Completado</div>}
+                                            </button>
+                                        );
+                                    })}
+                                    {Array.from({ length: 3 - intentos.length }).map((_, i) => (
+                                        <div key={`empty-${i}`} style={{ flex: 1, border: '2px dashed rgba(0,0,0,0.1)', borderRadius: 14, padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                            <span style={{ fontSize: 12, color: '#ccc', fontWeight: 700 }}>Intento {intentos.length + i + 1}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Preguntas del intento seleccionado */}
+                            {intentoData && (
+                                <div>
+                                    <div style={{ fontSize: 12, fontWeight: 800, color: THEME.subtext, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 12 }}>
+                                        Preguntas — Intento {intentoData.numero}
+                                    </div>
+                                    <div style={{ background: 'rgba(0,0,0,0.02)', borderRadius: 12, overflow: 'hidden', border: '1px solid rgba(0,0,0,0.06)' }}>
+                                        {intentoData.respuestas.map((r, i) => (
+                                            <div key={i} style={{
+                                                display: 'flex', alignItems: 'center', gap: 14,
+                                                padding: '12px 16px',
+                                                borderBottom: i < intentoData.respuestas.length - 1 ? '1px solid rgba(0,0,0,0.05)' : 'none',
+                                                background: r.es_correcta ? 'rgba(67,137,81,0.04)' : 'rgba(255,31,54,0.04)',
+                                            }}>
+                                                <div style={{ width: 28, height: 28, borderRadius: '50%', background: r.es_correcta ? C.green + '20' : C.red + '20', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                                    <span style={{ fontSize: 14 }}>{r.es_correcta ? '✓' : '✗'}</span>
+                                                </div>
+                                                <div style={{ flex: 1 }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                                                        {r.dificultad && (
+                                                            <span style={{ fontSize: 11, fontWeight: 800, padding: '2px 8px', borderRadius: 20, background: levelBg(nivelLabel(r.dificultad)), color: levelColor(nivelLabel(r.dificultad)) }}>
+                                                                {nivelLabel(r.dificultad)}
+                                                            </span>
+                                                        )}
+                                                        {r.tipo && <span style={{ fontSize: 11, fontWeight: 700, color: THEME.subtext }}>{r.tipo}</span>}
+                                                    </div>
+                                                    <div style={{ fontSize: 11.5, color: THEME.subtext }}>Opción elegida: {r.opcion_elegida + 1}</div>
+                                                </div>
+                                                <span style={{ fontSize: 11.5, fontWeight: 800, color: r.es_correcta ? C.green : C.red }}>
+                                                    {r.es_correcta ? 'Correcta' : 'Incorrecta'}
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </>
+                    )}
+                </>
+            )}
+        </div>
+    );
 
     return (
         <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(42,42,42,0.55)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 60, padding: 24 }}>
@@ -376,119 +704,15 @@ function AlumnoDetalleModal({ alumno, actividadIdx, progresoActs, onClose }) {
                         {alumno.nombre[0].toUpperCase()}
                     </div>
                     <div style={{ flex: 1 }}>
-                        <h2 style={{ fontSize: 18, fontWeight: 900, color: '#fff', margin: 0 }}>{alumno.nombre}</h2>
-                        <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.75)', fontWeight: 600, margin: 0 }}>Historial de desempeño</p>
+                        <h2 style={{ fontSize: 18, fontWeight: 900, color: '#fff', margin: 0 }}>{alumno.nombre}{alumno.apellido ? ` ${alumno.apellido}` : ''}</h2>
+                        <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.75)', fontWeight: 600, margin: 0 }}>
+                            {actSelIdx === null ? 'Resumen de desempeño' : progresoActs[actSelIdx]?.titulo}
+                        </p>
                     </div>
                     <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: 10, width: 34, height: 34, cursor: 'pointer', color: '#fff', fontSize: 20, fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
                 </div>
 
-                {/* Selector de actividad (tabs) */}
-                {progresoActs.length > 1 && (
-                    <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid rgba(0,0,0,0.08)', overflowX: 'auto', flexShrink: 0 }}>
-                        {progresoActs.map((act, i) => (
-                            <button key={i} onClick={() => setActIdx(i)} style={{
-                                padding: '12px 20px', fontSize: 13, fontWeight: 800, border: 'none', cursor: 'pointer',
-                                background: 'transparent', fontFamily: 'Nunito', whiteSpace: 'nowrap',
-                                color: actIdx === i ? C.blue : THEME.subtext,
-                                borderBottom: actIdx === i ? `3px solid ${C.blue}` : '3px solid transparent',
-                                transition: 'all 0.15s',
-                            }}>
-                                {act.titulo}
-                            </button>
-                        ))}
-                    </div>
-                )}
-
-                <div style={{ flex: 1, overflowY: 'auto', padding: '24px 26px' }}>
-                    {loading && <div style={{ textAlign: 'center', padding: '40px 0', color: THEME.subtext }}>Cargando…</div>}
-                    {error && <div style={{ background: '#FEE', border: `1.5px solid ${C.red}`, borderRadius: 12, padding: '12px 16px', color: C.red, fontWeight: 700 }}>⚠️ {error}</div>}
-
-                    {datos && (
-                        <>
-                            {intentos.length === 0 ? (
-                                <div style={{ textAlign: 'center', padding: '40px 0', color: THEME.subtext }}>
-                                    <div style={{ fontSize: 36, marginBottom: 10 }}></div>
-                                    <div style={{ fontWeight: 700 }}>Este alumno aún no realizó esta actividad.</div>
-                                </div>
-                            ) : (
-                                <>
-                                    {/* Línea de tiempo de intentos */}
-                                    <div style={{ marginBottom: 24 }}>
-                                        <div style={{ fontSize: 12, fontWeight: 800, color: THEME.subtext, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 12 }}>
-                                            Intentos realizados · {intentos.length} de 3
-                                        </div>
-                                        <div style={{ display: 'flex', gap: 12, alignItems: 'stretch' }}>
-                                            {intentos.map((it, i) => {
-                                                const col = it.porcentaje_aciertos >= 70 ? C.green : it.porcentaje_aciertos >= 50 ? C.yellow : C.red;
-                                                const niv = nivelLabel(it.nivel_alcanzado);
-                                                const sel = intentoSel === i;
-                                                return (
-                                                    <button key={i} onClick={() => setIntentoSel(i)} style={{
-                                                        flex: 1, border: `2px solid ${sel ? C.blue : 'rgba(0,0,0,0.08)'}`,
-                                                        borderRadius: 14, padding: '14px 16px', background: sel ? C.blueLight : '#fff',
-                                                        cursor: 'pointer', fontFamily: 'Nunito', textAlign: 'left',
-                                                        transition: 'all 0.15s', boxShadow: sel ? `0 0 0 3px ${C.blue}22` : 'none',
-                                                    }}>
-                                                        <div style={{ fontSize: 11, fontWeight: 800, color: sel ? C.blue : THEME.subtext, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 6 }}>Intento {it.numero}</div>
-                                                        <div style={{ fontSize: 22, fontWeight: 900, color: col, lineHeight: 1, marginBottom: 4 }}>{it.porcentaje_aciertos}%</div>
-                                                        <div style={{ fontSize: 11, fontWeight: 700, color: THEME.subtext, marginBottom: 8 }}>{it.correctas}/{it.respondidas} correctas</div>
-                                                        <span style={{ fontSize: 11, fontWeight: 800, padding: '2px 8px', borderRadius: 20, background: levelBg(niv), color: levelColor(niv) }}>{niv}</span>
-                                                        {it.completado && <div style={{ fontSize: 11, color: C.green, fontWeight: 700, marginTop: 6 }}>✓ Completado</div>}
-                                                    </button>
-                                                );
-                                            })}
-                                            {/* Slots vacíos de intentos futuros */}
-                                            {Array.from({ length: 3 - intentos.length }).map((_, i) => (
-                                                <div key={`empty-${i}`} style={{ flex: 1, border: '2px dashed rgba(0,0,0,0.1)', borderRadius: 14, padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                    <span style={{ fontSize: 12, color: '#ccc', fontWeight: 700 }}>Intento {intentos.length + i + 1}</span>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-
-                                    {/* Detalle de preguntas del intento seleccionado */}
-                                    {intentoData && (
-                                        <div>
-                                            <div style={{ fontSize: 12, fontWeight: 800, color: THEME.subtext, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 12 }}>
-                                                Preguntas — Intento {intentoData.numero}
-                                            </div>
-                                            <div style={{ background: 'rgba(0,0,0,0.02)', borderRadius: 12, overflow: 'hidden', border: '1px solid rgba(0,0,0,0.06)' }}>
-                                                {intentoData.respuestas.map((r, i) => (
-                                                    <div key={i} style={{
-                                                        display: 'flex', alignItems: 'center', gap: 14,
-                                                        padding: '12px 16px',
-                                                        borderBottom: i < intentoData.respuestas.length - 1 ? '1px solid rgba(0,0,0,0.05)' : 'none',
-                                                        background: r.es_correcta ? 'rgba(67,137,81,0.04)' : 'rgba(255,31,54,0.04)',
-                                                    }}>
-                                                        <div style={{ width: 28, height: 28, borderRadius: '50%', background: r.es_correcta ? C.green + '20' : C.red + '20', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                                            <span style={{ fontSize: 14 }}>{r.es_correcta ? '✓' : '✗'}</span>
-                                                        </div>
-                                                        <div style={{ flex: 1 }}>
-                                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
-                                                                {r.dificultad && (
-                                                                    <span style={{ fontSize: 11, fontWeight: 800, padding: '2px 8px', borderRadius: 20, background: levelBg(nivelLabel(r.dificultad)), color: levelColor(nivelLabel(r.dificultad)) }}>
-                                                                        {nivelLabel(r.dificultad)}
-                                                                    </span>
-                                                                )}
-                                                                {r.tipo && (
-                                                                    <span style={{ fontSize: 11, fontWeight: 700, color: THEME.subtext }}>{r.tipo}</span>
-                                                                )}
-                                                            </div>
-                                                            <div style={{ fontSize: 11.5, color: THEME.subtext }}>Opción elegida: {r.opcion_elegida + 1}</div>
-                                                        </div>
-                                                        <span style={{ fontSize: 11.5, fontWeight: 800, color: r.es_correcta ? C.green : C.red }}>
-                                                            {r.es_correcta ? 'Correcta' : 'Incorrecta'}
-                                                        </span>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-                                </>
-                            )}
-                        </>
-                    )}
-                </div>
+                {actSelIdx === null ? <PantallaResumen /> : <PantallaDetalle />}
             </div>
         </div>
     );
@@ -496,21 +720,27 @@ function AlumnoDetalleModal({ alumno, actividadIdx, progresoActs, onClose }) {
 
 // ══════════════════════════════════════════════════════════════
 // ══════════════════════════════════════════════════════════════
-function MiClaseContent({ students, loadingStudents, codigoClase, onAlumnoCreado }) {
+function MiClaseContent({ students, loadingStudents, codigoClase, onAlumnoCreado, onAlumnoEditado }) {
     const [showForm, setShowForm] = useState(false);
     const [nombre, setNombre] = useState('');
+    const [apellido, setApellido] = useState('');
     const [password, setPassword] = useState('');
     const [saving, setSaving] = useState(false);
     const [formError, setFormError] = useState('');
+    const [editandoAlumno, setEditandoAlumno] = useState(null);
+    const [editNombre, setEditNombre] = useState('');
+    const [editApellido, setEditApellido] = useState('');
+    const [guardandoEdicion, setGuardandoEdicion] = useState(false);
 
     const handleCrear = async (e) => {
         e.preventDefault();
-        if (!nombre.trim() || !password.trim()) return;
+        if (!nombre.trim() || !apellido.trim() || !password.trim()) return;
         setSaving(true);
         setFormError('');
         try {
-            await crearAlumno(nombre.trim(), password.trim());
+            await crearAlumno(nombre.trim(), apellido.trim(), password.trim());
             setNombre('');
+            setApellido('');
             setPassword('');
             setShowForm(false);
             onAlumnoCreado();
@@ -518,6 +748,26 @@ function MiClaseContent({ students, loadingStudents, codigoClase, onAlumnoCreado
             setFormError(err.message || 'No se pudo crear el alumno');
         } finally {
             setSaving(false);
+        }
+    };
+
+    const iniciarEdicionAlumno = (alumno) => {
+        setEditandoAlumno(alumno.id);
+        setEditNombre(alumno.nombre);
+        setEditApellido(alumno.apellido || '');
+    };
+
+    const guardarEdicionAlumno = async (alumnoId) => {
+        if (!editNombre.trim() || !editApellido.trim()) return;
+        setGuardandoEdicion(true);
+        try {
+            await editarNombreAlumno(alumnoId, editNombre.trim(), editApellido.trim());
+            setEditandoAlumno(null);
+            onAlumnoEditado();
+        } catch (e) {
+            alert(e.message || 'No se pudo guardar');
+        } finally {
+            setGuardandoEdicion(false);
         }
     };
 
@@ -554,9 +804,14 @@ function MiClaseContent({ students, loadingStudents, codigoClase, onAlumnoCreado
             {/* Formulario de nuevo alumno */}
             {showForm && (
                 <form onSubmit={handleCrear} style={{ background: C.blueLight, border: `2px solid ${C.blue}33`, borderRadius: THEME.card.radius, padding: '20px 24px', marginBottom: 20, display: 'flex', gap: 14, alignItems: 'flex-end', flexWrap: 'wrap' }}>
-                    <div style={{ flex: '1 1 180px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        <label style={{ fontSize: 12, fontWeight: 800, color: C.dark }}>Nombre completo</label>
-                        <input value={nombre} onChange={e => setNombre(e.target.value)} placeholder="Ej. Sofía Torres"
+                    <div style={{ flex: '1 1 160px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <label style={{ fontSize: 12, fontWeight: 800, color: C.dark }}>Nombre</label>
+                        <input value={nombre} onChange={e => setNombre(e.target.value)} placeholder="Ej. Sofía"
+                            required style={fieldStyle} />
+                    </div>
+                    <div style={{ flex: '1 1 160px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <label style={{ fontSize: 12, fontWeight: 800, color: C.dark }}>Apellido</label>
+                        <input value={apellido} onChange={e => setApellido(e.target.value)} placeholder="Ej. Torres"
                             required style={fieldStyle} />
                     </div>
                     <div style={{ flex: '1 1 160px', display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -587,20 +842,47 @@ function MiClaseContent({ students, loadingStudents, codigoClase, onAlumnoCreado
                     </div>
                 ) : (
                     <>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px', gap: 12, padding: '12px 24px', background: 'rgba(0,0,0,0.03)', borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
-                            {['Alumno', 'ID'].map((h, i) => (
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 80px', gap: 12, padding: '12px 24px', background: 'rgba(0,0,0,0.03)', borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
+                            {['Alumno', 'ID', ''].map((h, i) => (
                                 <span key={i} style={{ fontSize: 11, fontWeight: 800, color: THEME.subtext, textTransform: 'uppercase', letterSpacing: 0.5 }}>{h}</span>
                             ))}
                         </div>
                         {students.map((s, i) => (
-                            <div key={s.id} style={{ display: 'grid', gridTemplateColumns: '1fr 80px', gap: 12, padding: '14px 24px', alignItems: 'center', borderBottom: i < students.length - 1 ? '1px solid rgba(0,0,0,0.04)' : 'none', background: i % 2 === 0 ? 'transparent' : 'rgba(0,0,0,0.015)' }}>
+                            <div key={s.id} style={{ display: 'grid', gridTemplateColumns: '1fr 80px 80px', gap: 12, padding: '14px 24px', alignItems: 'center', borderBottom: i < students.length - 1 ? '1px solid rgba(0,0,0,0.04)' : 'none', background: i % 2 === 0 ? 'transparent' : 'rgba(0,0,0,0.015)' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                                     <div style={{ width: 36, height: 36, borderRadius: '50%', background: C.blue + '18', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: 14, color: C.blue, flexShrink: 0 }}>
-                                        {s.nombre[0].toUpperCase()}
+                                        {s.nombre[0]?.toUpperCase() || '?'}
                                     </div>
-                                    <span style={{ fontSize: 14, fontWeight: 700, color: THEME.heading }}>{s.nombre}</span>
+                                    {editandoAlumno === s.id ? (
+                                        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flex: 1, flexWrap: 'wrap' }}>
+                                            <input
+                                                value={editNombre}
+                                                onChange={e => setEditNombre(e.target.value)}
+                                                placeholder="Nombre"
+                                                onKeyDown={e => { if (e.key === 'Escape') setEditandoAlumno(null); }}
+                                                autoFocus
+                                                style={{ ...fieldStyle, fontSize: 13, padding: '6px 10px', flex: '1 1 100px' }}
+                                            />
+                                            <input
+                                                value={editApellido}
+                                                onChange={e => setEditApellido(e.target.value)}
+                                                placeholder="Apellido"
+                                                onKeyDown={e => { if (e.key === 'Enter') guardarEdicionAlumno(s.id); if (e.key === 'Escape') setEditandoAlumno(null); }}
+                                                style={{ ...fieldStyle, fontSize: 13, padding: '6px 10px', flex: '1 1 100px' }}
+                                            />
+                                            <button onClick={() => guardarEdicionAlumno(s.id)} disabled={guardandoEdicion} title="Guardar" style={{ background: C.green, border: 'none', borderRadius: 8, padding: '5px 10px', cursor: 'pointer', color: '#fff', fontSize: 13, fontWeight: 800 }}>✓</button>
+                                            <button onClick={() => setEditandoAlumno(null)} title="Cancelar" style={{ background: '#eee', border: 'none', borderRadius: 8, padding: '5px 10px', cursor: 'pointer', color: '#555', fontSize: 13, fontWeight: 800 }}>✕</button>
+                                        </div>
+                                    ) : (
+                                        <span style={{ fontSize: 14, fontWeight: 700, color: THEME.heading }}>
+                                            {s.nombre}{s.apellido ? ` ${s.apellido}` : ''}
+                                        </span>
+                                    )}
                                 </div>
                                 <span style={{ fontSize: 12, color: THEME.subtext, fontWeight: 600 }}>#{s.id}</span>
+                                {editandoAlumno !== s.id && (
+                                    <button onClick={() => iniciarEdicionAlumno(s)} title="Editar nombre" style={{ background: 'none', border: `1.5px solid rgba(0,0,0,0.12)`, borderRadius: 8, padding: '5px 10px', cursor: 'pointer', fontSize: 12, color: THEME.subtext, fontFamily: 'Nunito', fontWeight: 700, whiteSpace: 'nowrap' }}>Editar</button>
+                                )}
                             </div>
                         ))}
                     </>
@@ -938,7 +1220,7 @@ function CreateModal({ onClose, onPublish, onEliminar, actividadExistente, texto
                                                                 <button
                                                                     onClick={() => { setEditandoIdx(i); setEditForm({ enunciado: q.pregunta, opciones: [...q.opciones], opcion_correcta: q.correcta, tipo: q.tipo, dificultad: q.nivel }); }}
                                                                     style={{ background: 'rgba(0,0,0,0.06)', color: '#666', border: 'none', borderRadius: 10, padding: '6px 12px', fontSize: 12, fontWeight: 800, cursor: 'pointer', fontFamily: 'Nunito' }}>
-                                                                    ✏️ Editar
+                                                                    Editar
                                                                 </button>
                                                                 <button onClick={() => toggleAprobada(i)} style={{ background: q.aprobada ? C.green : 'rgba(0,0,0,0.06)', color: q.aprobada ? '#fff' : '#888', border: 'none', borderRadius: 10, padding: '6px 14px', fontSize: 12, fontWeight: 800, cursor: 'pointer', fontFamily: 'Nunito', whiteSpace: 'nowrap' }}>
                                                                     {q.aprobada ? '✓ Aprobada' : 'Aprobar'}
@@ -1345,11 +1627,22 @@ function Toast({ msg }) {
 // ══════════════════════════════════════════════════════════════
 function ActividadesContent({ acts, loading, onOpenModal, onVerPreguntas, onVerResultados, onEliminar, onRetomar, onGenerarDesdeTexto, onEliminarTexto }) {
     const publicadas = acts.filter((a) => a.validada).length;
+    const [busqueda, setBusqueda] = useState('');
+    const actsFiltradas = acts.filter(a => a.titulo.toLowerCase().includes(busqueda.toLowerCase()));
+
     return (
         <>
-            <div style={{ marginBottom: 24 }}>
-                <h1 style={{ fontSize: 24, fontWeight: 900, color: C.dark }}>Mis actividades</h1>
-                <p style={{ fontSize: 13.5, color: '#888', marginTop: 4 }}>{acts.length} textos subidos · {publicadas} actividades publicadas</p>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 24, flexWrap: 'wrap' }}>
+                <div>
+                    <h1 style={{ fontSize: 24, fontWeight: 900, color: C.dark }}>Mis actividades</h1>
+                    <p style={{ fontSize: 13.5, color: '#888', marginTop: 4 }}>{acts.length} textos subidos · {publicadas} actividades publicadas</p>
+                </div>
+                <input
+                    value={busqueda}
+                    onChange={e => setBusqueda(e.target.value)}
+                    placeholder="Buscar actividad…"
+                    style={{ padding: '9px 14px', borderRadius: 12, border: '1.5px solid rgba(0,0,0,0.12)', fontSize: 13, fontFamily: 'Nunito', fontWeight: 600, outline: 'none', background: '#fff', width: 210, alignSelf: 'center' }}
+                />
             </div>
 
             <div style={{ display: 'flex', gap: 14, marginBottom: 26 }}>
@@ -1368,12 +1661,14 @@ function ActividadesContent({ acts, loading, onOpenModal, onVerPreguntas, onVerR
 
             {loading
                 ? <div style={{ textAlign: 'center', padding: '60px 0', color: THEME.subtext, fontSize: 14 }}>Cargando actividades…</div>
-                : (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 20 }}>
-                        <NewActivityCard onClick={onOpenModal} />
-                        {acts.map((act, i) => <ActivityCard key={act.texto_id} act={act} color={ACT_COLORS[i % ACT_COLORS.length]} onVerPreguntas={onVerPreguntas} onVerResultados={onVerResultados} onEliminar={onEliminar} onRetomar={onRetomar} onGenerarDesdeTexto={onGenerarDesdeTexto} onEliminarTexto={onEliminarTexto} />)}
-                    </div>
-                )
+                : actsFiltradas.length === 0 && busqueda
+                    ? <div style={{ textAlign: 'center', padding: '60px 0', color: THEME.subtext, fontSize: 14 }}>No se encontró ninguna actividad con ese nombre.</div>
+                    : (
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 20 }}>
+                            {!busqueda && <NewActivityCard onClick={onOpenModal} />}
+                            {actsFiltradas.map((act, i) => <ActivityCard key={act.texto_id} act={act} color={ACT_COLORS[i % ACT_COLORS.length]} onVerPreguntas={onVerPreguntas} onVerResultados={onVerResultados} onEliminar={onEliminar} onRetomar={onRetomar} onGenerarDesdeTexto={onGenerarDesdeTexto} onEliminarTexto={onEliminarTexto} />)}
+                        </div>
+                    )
             }
         </>
     );
@@ -1382,7 +1677,8 @@ function ActividadesContent({ acts, loading, onOpenModal, onVerPreguntas, onVerR
 // ══════════════════════════════════════════════════════════════
 // PANEL DOCENTE — componente principal
 // ══════════════════════════════════════════════════════════════
-export default function PanelDocente({ user, onLogout }) {
+export default function PanelDocente({ user: userProp, onLogout }) {
+    const [user, setUser] = useState(userProp);
     const [activeNav, setActiveNav] = useState('clase');
     const [collapsed, setCollapsed] = useState(false);
     const [modal, setModal] = useState(null); // null = cerrado, {} = crear nueva, {actividad_id, titulo} = retomar borrador
@@ -1488,13 +1784,13 @@ export default function PanelDocente({ user, onLogout }) {
                 onEliminarTexto={handleEliminarTexto}
             />;
         if (activeNav === 'clase')
-            return <MiClaseContent students={students} loadingStudents={loadingStudents} codigoClase={user?.codigo_clase} onAlumnoCreado={() => { recargarAlumnos(); setToast('Alumno creado correctamente'); setTimeout(() => setToast(''), 3000); }} />;
+            return <MiClaseContent students={students} loadingStudents={loadingStudents} codigoClase={user?.codigo_clase} onAlumnoCreado={() => { recargarAlumnos(); setToast('Alumno creado correctamente'); setTimeout(() => setToast(''), 3000); }} onAlumnoEditado={() => { recargarAlumnos(); setToast('Nombre actualizado'); setTimeout(() => setToast(''), 3000); }} />;
         return <ProgresoContent students={students} loadingStudents={loadingStudents} resumen={resumen} loadingResumen={loadingResumen} progresoActs={progresoActs} loadingProgreso={loadingProgreso} onActualizarResumen={recargarResumenIA} />;
     };
 
     return (
         <div style={{ display: 'flex', minHeight: '100vh', background: THEME.main.bg, fontFamily: 'Nunito' }}>
-            <Sidebar active={activeNav} onNav={setActiveNav} collapsed={collapsed} user={user} onLogout={onLogout} />
+            <Sidebar active={activeNav} onNav={setActiveNav} collapsed={collapsed} user={user} onLogout={onLogout} onNombreDocenteEditado={(nombre) => { setUser(u => ({ ...u, nombre })); setToast('Nombre actualizado'); setTimeout(() => setToast(''), 3000); }} />
 
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
                 <div style={{ background: THEME.topbar.bg, borderBottom: `1px solid ${THEME.topbar.border}`, padding: '0 28px', height: 64, display: 'flex', alignItems: 'center', gap: 16, flexShrink: 0 }}>

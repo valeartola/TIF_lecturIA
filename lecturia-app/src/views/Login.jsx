@@ -7,6 +7,7 @@ export default function Login({ onLoginSuccess }) {
     const [role, setRole] = useState('docente');
     const [email, setEmail] = useState('');
     const [name, setName] = useState('');
+    const [lastName, setLastName] = useState('');
     const [classCode, setClassCode] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
@@ -22,7 +23,7 @@ export default function Login({ onLoginSuccess }) {
             // 1. Obtener token
             const { access_token } = role === 'docente'
                 ? await loginDocente(email, password)
-                : await loginAlumno(classCode, name, password);
+                : await loginAlumno(classCode, `${name.trim()} ${lastName.trim()}`, password);
 
             // 2. Obtener datos del usuario
             localStorage.setItem('token', access_token);
@@ -73,6 +74,7 @@ export default function Login({ onLoginSuccess }) {
         setError('');
         setEmail('');
         setName('');
+        setLastName('');
         setClassCode('');
         setPassword('');
     };
@@ -145,7 +147,7 @@ export default function Login({ onLoginSuccess }) {
                                 <div style={{ display: 'flex', background: C.lightGray, padding: '4px', borderRadius: '12px' }}>
                                     {['docente', 'estudiante'].map((r) => (
                                         <button key={r} type="button"
-                                            onClick={() => { setRole(r); setError(''); setEmail(''); setName(''); setClassCode(''); }}
+                                            onClick={() => { setRole(r); setError(''); setEmail(''); setName(''); setLastName(''); setClassCode(''); }}
                                             style={{ flex: 1, padding: '10px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontWeight: '700', transition: 'all 0.2s', background: role === r ? '#fff' : 'transparent', color: role === r ? C.darkText : C.gray, boxShadow: role === r ? '0 2px 4px rgba(0,0,0,0.05)' : 'none' }}>
                                             {r === 'docente' ? 'Docente' : 'Estudiante'}
                                         </button>
@@ -163,9 +165,15 @@ export default function Login({ onLoginSuccess }) {
                                 {/* Campos del estudiante */}
                                 {role === 'estudiante' && (
                                     <>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                            <label style={labelStyle}>Nombre completo</label>
-                                            <input type="text" placeholder="Ej. Sofía" value={name} onChange={(e) => setName(e.target.value)} required style={inputStyle} />
+                                        <div style={{ display: 'flex', gap: '12px' }}>
+                                            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                <label style={labelStyle}>Nombre</label>
+                                                <input type="text" placeholder="Ej. Sofía" value={name} onChange={(e) => setName(e.target.value)} required style={inputStyle} />
+                                            </div>
+                                            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                <label style={labelStyle}>Apellido</label>
+                                                <input type="text" placeholder="Ej. Torres" value={lastName} onChange={(e) => setLastName(e.target.value)} required style={inputStyle} />
+                                            </div>
                                         </div>
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                                             <label style={labelStyle}>Código de clase</label>

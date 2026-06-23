@@ -5,7 +5,8 @@ from datetime import datetime
 class Usuario(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     nombre: str
-    email: Optional[str] = Field(default=None)          # solo para docentes
+    apellido: Optional[str] = Field(default=None)        # solo para alumnos (obligatorio en creación)
+    email: Optional[str] = Field(default=None)           # solo para docentes
     password_hash: str
     rol: str
     codigo_clase: Optional[str] = Field(default=None, unique=True)  # solo para docentes

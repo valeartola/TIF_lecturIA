@@ -75,11 +75,11 @@ export const getMe = () => apiFetch('/auth/me');
 export const listarAlumnos = () => apiFetch('/auth/alumnos');
 
 /** Crea un alumno (docente) */
-export const crearAlumno = (nombre, password) =>
+export const crearAlumno = (nombre, apellido, password) =>
     apiFetch('/auth/alumnos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nombre, password }),
+        body: JSON.stringify({ nombre, apellido, password }),
     });
 
 // ── Textos ───────────────────────────────────────────────────
@@ -167,4 +167,21 @@ export const editarPregunta = (preguntaId, body) =>
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
+    });
+// ── Edición de nombres ────────────────────────────────────────
+
+/** Cambia el nombre y apellido de un alumno (solo docente) */
+export const editarNombreAlumno = (alumnoId, nombre, apellido) =>
+    apiFetch(`/auth/alumnos/${alumnoId}/nombre`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nombre, apellido }),
+    });
+
+/** Cambia el nombre del docente autenticado */
+export const editarNombreDocente = (nombre) =>
+    apiFetch('/auth/me/nombre', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nombre }),
     });
