@@ -49,6 +49,47 @@ class Generador:
         random.shuffle(posiciones)
         return posiciones[:cantidad]
 
+    def _resolver_correcta(self, candidata: dict) -> dict:
+        """
+        El LLM ya no recibe una posición impuesta de antemano: piensa la
+        pregunta, escribe la respuesta correcta y los distractores, y
+        copia la respuesta correcta tal cual en el campo
+        'respuesta_correcta'. Acá solo BUSCAMOS esa frase dentro de
+        'opciones' para saber en qué índice quedó — no hay ninguna
+        decisión de contenido de por medio, solo encontrar dónde está.
+
+        Para tolerar pequeñas diferencias de formato (mayúsculas, espacios
+        de más) al copiar la frase dos veces, primero se intenta un match
+        exacto y, si no aparece, un match ignorando mayúsculas y espacios
+        extra.
+
+        Si no se encuentra de ninguna forma, se lanza ValueError: es la
+        señal de que el LLM cometió un error real (la respuesta que dice
+        haber elegido no está entre las opciones) y la pregunta se
+        descarta para ser regenerada, igual que cualquier otro rechazo.
+        """
+        opciones = candidata.get("opciones", [])
+        respuesta = candidata.get("respuesta_correcta", "")
+
+        if respuesta in opciones:
+            idx = opciones.index(respuesta)
+        else:
+            normalizada = " ".join(respuesta.strip().lower().split())
+            idx = None
+            for i, op in enumerate(opciones):
+                if " ".join(op.strip().lower().split()) == normalizada:
+                    idx = i
+                    break
+            if idx is None:
+                raise ValueError(
+                    f"'respuesta_correcta' no aparece entre las opciones: "
+                    f"{respuesta!r} no está en {opciones!r}"
+                )
+
+        candidata["correcta"] = idx
+        candidata.pop("respuesta_correcta", None)
+        return candidata
+
     def _llamar_generador(self, prompt: str) -> dict:
         contenido = self._cliente.llamar(prompt)
         try:
@@ -109,17 +150,23 @@ class Generador:
                             feedbacks: dict = None) -> list[dict]:
         """
         Genera todas las candidatas de un lote (uno por slot, definido por
-        tipo + posición) en UNA SOLA llamada al generador. Esto reduce el
-        consumo de tokens (texto y specs se envían una vez) y reduce el
-        riesgo de repetición entre preguntas, porque el modelo las escribe
-        todas juntas con visión simultánea del lote completo.
+        tipo) en UNA SOLA llamada al generador. Esto reduce el consumo de
+        tokens (texto y specs se envían una vez) y reduce el riesgo de
+        repetición entre preguntas, porque el modelo las escribe todas
+        juntas con visión simultánea del lote completo.
+
+        El LLM ya no recibe una posición objetivo para la respuesta
+        correcta: la marca él mismo en 'respuesta_correcta', y acá se
+        resuelve a índice numérico con _resolver_correcta (búsqueda, sin
+        criterio de contenido). 'posiciones' se mantiene como parámetro
+        solo para loguear/trazabilidad, ya no se envía al prompt.
 
         feedbacks: dict {indice_slot: texto_feedback} para reintentos con corrección.
         """
         feedbacks = feedbacks or {}
 
         prompt = construir_prompt_generador_lote(
-            texto, dificultad, tipos, posiciones,
+            texto, dificultad, tipos,
             preguntas_aprobadas, self._specs,
             feedbacks=feedbacks,
             aspectos_previos=aspectos_cubiertos,
@@ -127,12 +174,19 @@ class Generador:
 
         candidatas = self._llamar_generador_lote(prompt, len(tipos))
 
+        resultado = []
         for i, (candidata, tipo, pos) in enumerate(zip(candidatas, tipos, posiciones)):
+            try:
+                candidata = self._resolver_correcta(candidata)
+            except ValueError as e:
+                logger.warning(f"    slot {i+1}: {e}")
+                candidata["_sin_correcta_valida"] = True
             candidata["_slot"] = i
             candidata["_tipo"] = tipo
             candidata["_pos"] = pos
+            resultado.append(candidata)
 
-        return candidatas
+        return resultado
 
     def _generar_por_nivel(self, juez, texto: str, dificultad: str,
                            aspectos_previos: list = None) -> dict:
@@ -178,7 +232,8 @@ class Generador:
             # Usamos el tipo del primer slot como referencia (todos del mismo nivel)
             evaluaciones = juez.evaluar_lote(
                 texto, candidatas, dificultad, tipos_lote[0],
-                aspectos_previos=aspectos_cubiertos
+                aspectos_previos=aspectos_cubiertos,
+                enunciados_previos=[p["pregunta"] for p in preguntas_aprobadas],
             )
 
             slots_pendientes_siguiente = []

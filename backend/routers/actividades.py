@@ -85,81 +85,6 @@ def generar(
     }
 
 
-@router.post("/{actividad_id}/generar-mas")
-def generar_mas(
-    actividad_id: int,
-    session: Session = Depends(get_session),
-    docente: Usuario = Depends(solo_docente)
-):
-    """
-    Genera más preguntas sobre una actividad EXISTENTE que quedó en borrador
-    (ej. porque la generación se interrumpió o el docente no aprobó
-    suficientes preguntas para publicarla).
-
-    A diferencia de /generar, no crea una Actividad nueva: agrega preguntas
-    a la actividad dada, usando las preguntas ya existentes como contexto
-    para que el generador no repita lo que ya está.
-    """
-    actividad = session.get(Actividad, actividad_id)
-    if not actividad:
-        raise HTTPException(status_code=404, detail="Actividad no encontrada")
-    if actividad.validada:
-        raise HTTPException(status_code=400, detail="La actividad ya está publicada")
-
-    texto = session.get(Texto, actividad.texto_id)
-    if not texto:
-        raise HTTPException(status_code=404, detail="Texto no encontrado")
-    if texto.docente_id != docente.id:
-        raise HTTPException(status_code=403, detail="No tenés permiso sobre esta actividad")
-
-    generador, juez = _crear_generador_y_juez()
-    try:
-        resultado = generador.generar_actividad(juez, texto.contenido)
-    except Exception as exc:
-        import logging
-        logging.getLogger("lecturia").error("Falló la generación con IA", exc_info=exc)
-        raise HTTPException(
-            status_code=503,
-            detail="El servicio de IA no está disponible en este momento. Intentá más tarde.",
-        )
-
-    preguntas_con_id = {}
-
-    for dificultad, preguntas in resultado["preguntas_por_nivel"].items():
-        preguntas_con_id[dificultad] = []
-
-        for p in preguntas:
-            pregunta = Pregunta(
-                actividad_id=actividad.id,
-                dificultad=dificultad,
-                enunciado=p["pregunta"],
-                opciones_json=json.dumps(p["opciones"], ensure_ascii=False),
-                opcion_correcta=p["correcta"],
-                tipo=p["tipo"],
-                validada=False
-            )
-
-            session.add(pregunta)
-            session.flush()
-
-            preguntas_con_id[dificultad].append({
-                "id": pregunta.id,
-                "pregunta": p["pregunta"],
-                "opciones": p["opciones"],
-                "correcta": p["correcta"],
-                "tipo": p["tipo"],
-                "validada": pregunta.validada,
-            })
-
-    session.commit()
-
-    return {
-        "id": actividad.id,
-        "preguntas_por_nivel": preguntas_con_id,
-        "metricas": resultado["metricas"]
-    }
-
-
 @router.delete("/{actividad_id}")
 def eliminar_actividad(
     actividad_id: int,
@@ -381,12 +306,7 @@ def estado_intentos(
     intento = intento_actual(alumno.id, actividad_id, session)
     sin_intentos = intento > MAX_INTENTOS
 
-    # Puntajes de cada intento. Un intento anterior al intento_actual del alumno
-    # se considera completo siempre: por definición, si el alumno ya avanzó más
-    # allá de él, es porque ese intento se cerró (sea porque llegó al tope de
-    # preguntas, o porque se agotaron las preguntas validadas de algún nivel
-    # antes de llegar al tope). Comparar solo "respuestas >= tope" subestimaba
-    # como incompletos los intentos cerrados por falta de preguntas.
+    # Puntajes de cada intento completado
     puntajes = []
     tope = cantidad_preguntas_sesion(actividad_id, session)
     for i in range(1, MAX_INTENTOS + 1):
@@ -399,12 +319,11 @@ def estado_intentos(
         ).all()
         if respuestas:
             correctas = sum(1 for r in respuestas if r.es_correcta)
-            completo = len(respuestas) >= tope or i < intento
             puntajes.append({
                 "intento": i,
                 "respondidas": len(respuestas),
                 "correctas": correctas,
-                "completo": completo,
+                "completo": len(respuestas) >= tope,
             })
 
     return {
@@ -488,3 +407,4 @@ def proxima_pregunta(
             "opciones": json.loads(pregunta.opciones_json),
         }
     }
+ 

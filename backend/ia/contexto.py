@@ -96,7 +96,7 @@ Recordá: aprobada=true solo si TODAS las cuatro dimensiones tienen puntaje ≥ 
 
 
 def construir_prompt_generador_lote(
-    texto, dificultad, tipos, posiciones, preguntas_anteriores, specs,
+    texto, dificultad, tipos, preguntas_anteriores, specs,
     feedbacks=None, aspectos_previos=None
 ):
     """
@@ -108,12 +108,17 @@ def construir_prompt_generador_lote(
     a que el modelo no se repita a sí mismo, porque genera todo el lote
     con visión simultánea de las preguntas anteriores y de las nuevas.
 
+    El LLM no recibe una posición objetivo para la opción correcta: la
+    marca él mismo (campo "respuesta_correcta"), y el índice numérico se
+    resuelve después por búsqueda en Generador._resolver_correcta. Esto
+    evita que el modelo tenga que "encajar" el contenido correcto en una
+    posición predeterminada, que es donde se producían errores de
+    indexado (la respuesta correcta quedaba mal marcada).
+
     Args:
         texto: el texto fuente.
         dificultad: FÁCIL, MEDIA o DIFÍCIL.
         tipos: lista de tipos de pregunta, uno por slot.
-        posiciones: lista de posiciones 0-3 donde debe ir la opción correcta,
-            una por slot, en el mismo orden que tipos.
         preguntas_anteriores: lista de preguntas ya aprobadas (de niveles
             previos en la misma actividad).
         specs: especificaciones pedagógicas (de specs_para_generador()).
@@ -126,8 +131,8 @@ def construir_prompt_generador_lote(
     n = len(tipos)
 
     slots_desc = []
-    for i, (tipo, pos) in enumerate(zip(tipos, posiciones)):
-        bloque = f'- Slot {i}: tipo="{tipo}", posición de la opción correcta={pos}'
+    for i, tipo in enumerate(tipos):
+        bloque = f'- Slot {i}: tipo="{tipo}"'
         if i in feedbacks:
             bloque += f'\n  REINTENTO — la versión anterior fue rechazada por: {feedbacks[i]}\n  Corregí ese problema específico en esta nueva versión.'
         slots_desc.append(bloque)
@@ -137,11 +142,15 @@ def construir_prompt_generador_lote(
     if aspectos_previos:
         lista = "\n".join(f"- {a}" for a in aspectos_previos)
         bloque_aspectos = f"""
-## ASPECTOS YA CUBIERTOS (no repetir)
+## ASPECTOS YA CUBIERTOS (no repetir, ni siquiera reformulados)
 Preguntas de niveles anteriores ya cubren estos aspectos del texto:
 {lista}
 
-Ninguna de las nuevas preguntas debe apuntar a estos aspectos.
+Ninguna de las nuevas preguntas debe apuntar a estos aspectos, incluyendo
+reformulaciones o variantes de la misma idea (ej. si ya se preguntó por la
+"moraleja" o "lección principal" del texto, no generes otra pregunta sobre
+"qué aprendió" el personaje ni sobre "la idea principal" si en el fondo
+apunta al mismo mensaje). Elegí un aspecto del texto genuinamente distinto.
 """
 
     bloque_anteriores = ""
@@ -175,14 +184,39 @@ ideas, datos ni wording entre las {n} preguntas de este lote.
 
 Dificultad pedida para TODO el lote: {dificultad}
 
+## COBERTURA DEL TEXTO (importante para evitar repetición)
+Antes de escribir las preguntas, identificá mentalmente entre 5 y 8 momentos
+o aspectos DISTINTOS del texto (ej. una situación inicial, una reacción de
+un personaje secundario, una dificultad concreta, una acción de otro
+personaje, el desenlace, un detalle descriptivo, etc.).
+
+Repartí las {n} preguntas de este lote entre esos momentos distintos: cada
+pregunta debe apuntar a un momento o aspecto diferente del texto. Si dos
+preguntas del lote terminarían apuntando al mismo momento o a la misma idea
+central (por ejemplo, la moraleja o el mensaje general), descartá una de
+las dos y elegí otro aspecto del texto que todavía no esté cubierto, aunque
+sea secundario.
+
+No concentres las preguntas únicamente en la idea principal o en el
+desenlace: el texto tiene personajes secundarios, causas, reacciones y
+detalles que también son material válido para preguntar.
+
 ## SLOTS A GENERAR
-Cada slot define el tipo de pregunta y en qué posición (0-3) debe quedar
-la opción correcta. Respetá exactamente la posición indicada por slot.
+Cada slot define el tipo de pregunta que tenés que generar.
 {bloque_slots}
 {bloque_anteriores}{bloque_aspectos}
 ## ORTOGRAFÍA
 Revisá la ortografía y gramática antes de responder. No uses errores tipográficos
 ni palabras mal escritas en ninguna pregunta ni opción.
+
+## CÓMO ARMAR CADA PREGUNTA (hacelo en este orden mental, no lo escribas)
+1. Pensá la pregunta y la ÚNICA respuesta correcta, justificada por el texto.
+2. Escribí esa respuesta correcta tal cual en el campo "respuesta_correcta".
+3. Después escribí los otros 3 distractores (también dentro de "opciones"),
+   plausibles pero claramente incorrectos según el texto.
+4. NO te preocupes por el orden de las opciones dentro de la lista: lo
+   importante es que "respuesta_correcta" sea EXACTAMENTE igual, carácter
+   por carácter, a una de las strings que pusiste en "opciones".
 
 ## FORMATO
 Devolvé ÚNICAMENTE un JSON válido con esta forma exacta — un objeto con
@@ -194,8 +228,8 @@ Sin texto extra, sin markdown:
   "preguntas": [
     {{
       "pregunta": "...",
-      "opciones": ["opción 0", "opción 1", "opción 2", "opción 3"],
-      "correcta": <posición indicada para ese slot>
+      "opciones": ["opción A", "opción B", "opción C", "opción D"],
+      "respuesta_correcta": "<copiá acá, exactamente igual, la opción correcta>"
     }},
     ...
   ]

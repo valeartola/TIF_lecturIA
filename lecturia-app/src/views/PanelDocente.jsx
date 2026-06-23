@@ -174,19 +174,17 @@ function ProgresoContent({ students, loadingStudents, resumen, loadingResumen, p
                 <StatCard
                     label="Necesitan atención"
                     value={necesitanAtencion}
-                    sub={necesitanAtencion === 0 ? '¡Toda la clase bien!' : 'Promedio menor al 50%'}
                     icon={necesitanAtencion > 0 ? '⚠️' : '✅'}
                     color={necesitanAtencion > 0 ? C.red : C.pink}
                 />
                 <StatCard
                     label="Promedio global"
                     value={promedioGlobal !== null ? `${promedioGlobal}%` : '—'}
-                    sub="Promedio entre actividades"
                     icon="⭐"
                     color={C.yellow}
                 />
-                <StatCard label="Total de estudiantes" value={totalAlumnos} sub="Registrados en la clase" icon="🧒" color={C.blue} />
-                <StatCard label="Actividades publicadas" value={progresoActs.length} sub="Con al menos un alumno" icon="📖" color={C.green} />
+                <StatCard label="Total de estudiantes" value={totalAlumnos} icon="🧒" color={C.blue} />
+                <StatCard label="Actividades publicadas" value={progresoActs.length} icon="📖" color={C.green} />
             </div>
 
             {/* ── Promedio por actividad + Distribución de promedios por alumno ── */}
@@ -252,7 +250,6 @@ function ProgresoContent({ students, loadingStudents, resumen, loadingResumen, p
             {/* ── Tabla de alumnos ── */}
             <div style={{ background: card.bg, borderRadius: card.radius, boxShadow: card.shadow, padding: '22px 24px' }}>
                 <h2 style={{ fontSize: 15, fontWeight: 800, color: THEME.heading, marginBottom: 2 }}>Desempeño por alumno</h2>
-                <p style={{ fontSize: 12, color: THEME.subtext, marginBottom: 18 }}>Hacé clic en "Ver detalle" para ver el historial de intentos de cada alumno</p>
 
                 {loadingStudents || loadingProgreso
                     ? <div style={{ padding: '20px 0', textAlign: 'center', color: THEME.subtext }}>Cargando…</div>
@@ -410,7 +407,7 @@ function AlumnoDetalleModal({ alumno, actividadIdx, progresoActs, onClose }) {
                         <>
                             {intentos.length === 0 ? (
                                 <div style={{ textAlign: 'center', padding: '40px 0', color: THEME.subtext }}>
-                                    <div style={{ fontSize: 36, marginBottom: 10 }}>📭</div>
+                                    <div style={{ fontSize: 36, marginBottom: 10 }}></div>
                                     <div style={{ fontWeight: 700 }}>Este alumno aún no realizó esta actividad.</div>
                                 </div>
                             ) : (
@@ -631,7 +628,7 @@ function ActivityCard({ act, color, onVerPreguntas, onVerResultados, onEliminar,
             <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12, flex: 1 }}>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                     <span style={{ background: act.validada ? '#E8F5EB' : sinActividad ? '#FEECEC' : '#FFF8E1', color: act.validada ? C.green : sinActividad ? C.red : C.yellow, fontSize: 11.5, fontWeight: 800, borderRadius: 20, padding: '3px 11px' }}>
-                        {act.validada ? '✓ Publicada' : sinActividad ? '⚠️ Sin generar' : '⏳ Borrador'}
+                        {act.validada ? 'Publicada' : sinActividad ? 'Sin generar' : 'Borrador'}
                     </span>
                     <span style={{ background: 'rgba(0,0,0,0.05)', color: '#666', fontSize: 11.5, fontWeight: 800, borderRadius: 20, padding: '3px 11px' }}>
                         {act.palabras?.toLocaleString()} palabras
@@ -666,7 +663,7 @@ function NewActivityCard({ onClick }) {
             <div style={{ width: 64, height: 64, borderRadius: 18, background: C.blue, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 34, color: '#fff', boxShadow: `0 6px 18px ${C.blue}44` }}>+</div>
             <div style={{ textAlign: 'center' }}>
                 <div style={{ fontSize: 16, fontWeight: 900, color: C.blue }}>Crear nueva actividad</div>
-                <div style={{ fontSize: 12.5, color: '#888', fontWeight: 600, marginTop: 4, maxWidth: 200, lineHeight: 1.4 }}>Subí un PDF y la IA generará las preguntas automáticamente</div>
+                <div style={{ fontSize: 12.5, color: '#888', fontWeight: 600, marginTop: 4, maxWidth: 200, lineHeight: 1.4 }}></div>
             </div>
         </button>
     );

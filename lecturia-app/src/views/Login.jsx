@@ -106,7 +106,7 @@ export default function Login({ onLoginSuccess }) {
                             <form onSubmit={handleRegistro} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                                     <label style={labelStyle}>Nombre completo</label>
-                                    <input type="text" placeholder="Ej. Marisa Asensio" value={name} onChange={(e) => setName(e.target.value)} required style={inputStyle} />
+                                    <input type="text" placeholder="Ej. Marisa Gomez" value={name} onChange={(e) => setName(e.target.value)} required style={inputStyle} />
                                 </div>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                                     <label style={labelStyle}>Correo electrónico</label>
@@ -136,7 +136,7 @@ export default function Login({ onLoginSuccess }) {
                         </>
                     ) : (
                         <>
-                            <h2 style={{ fontSize: '32px', fontWeight: '900', color: C.green, marginBottom: '8px' }}>¡Hola de nuevo!</h2>
+                            <h2 style={{ fontSize: '32px', fontWeight: '900', color: C.green, marginBottom: '8px' }}>¡Bienvenido!</h2>
                             <p style={{ color: C.gray, marginBottom: '32px' }}>Ingresá tus datos para acceder a LecturIA</p>
 
                             <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -156,7 +156,7 @@ export default function Login({ onLoginSuccess }) {
                                 {role === 'docente' && (
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                                         <label style={labelStyle}>Correo electrónico</label>
-                                        <input type="email" placeholder="ejemplo@lecturia.com" value={email} onChange={(e) => setEmail(e.target.value)} required style={inputStyle} />
+                                        <input type="email" placeholder="lecturia@mail.com" value={email} onChange={(e) => setEmail(e.target.value)} required style={inputStyle} />
                                     </div>
                                 )}
 
@@ -165,7 +165,7 @@ export default function Login({ onLoginSuccess }) {
                                     <>
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                                             <label style={labelStyle}>Nombre completo</label>
-                                            <input type="text" placeholder="Ej. Sofía Torres" value={name} onChange={(e) => setName(e.target.value)} required style={inputStyle} />
+                                            <input type="text" placeholder="Ej. Sofía" value={name} onChange={(e) => setName(e.target.value)} required style={inputStyle} />
                                         </div>
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                                             <label style={labelStyle}>Código de clase</label>
@@ -209,7 +209,7 @@ export default function Login({ onLoginSuccess }) {
             {/* Panel derecho: logo */}
             <div style={{ flex: 1.05, position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: C.cream, padding: '40px', minWidth: 0, borderLeft: `1px solid ${C.lightGray}` }}>
                 <img src="/uploads/LOGO-ed452e35.png" alt="LecturIA" style={{ maxWidth: '75%', maxHeight: '70%', objectFit: 'contain' }} />
-                <p style={{ position: 'absolute', bottom: '8%', left: 0, right: 0, textAlign: 'center', fontWeight: 800, color: C.green, fontSize: '24px' }}>
+                <p style={{ position: 'absolute', bottom: '15%', left: 0, right: 0, textAlign: 'center', fontWeight: 800, color: C.green, fontSize: '24px' }}>
                     Aprender a leer, para aprender leyendo
                 </p>
             </div>

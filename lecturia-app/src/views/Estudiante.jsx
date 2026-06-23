@@ -397,8 +397,7 @@ export default function Estudiante({ user, onLogout }) {
 
           <div style={{ border: '2px solid rgba(53,78,171,0.18)', borderRadius: 16, padding: '24px 28px', background: '#fff', boxShadow: '0 2px 12px rgba(0,0,0,0.05)' }}>
             {selectedTexto?.contenido?.split('\n').filter(Boolean).map((p, i) => (
-              <p key={i} style={{ fontSize: 15, lineHeight: 1.85, color: '#3a3a3a', fontWeight: 500, marginBottom: 16 }}>{p}</p>
-            ))}
+              <p key={i} style={{ fontSize: 15, lineHeight: 1.85, color: '#3a3a3a', fontWeight: 500, marginBottom: 16, textAlign: 'justify' }}>{p}</p>))}
           </div>
         </div>
 
@@ -410,7 +409,7 @@ export default function Estudiante({ user, onLogout }) {
             <span style={{ background: 'rgba(255,255,255,0.25)', color: '#fff', fontSize: 11, fontWeight: 800, borderRadius: 20, padding: '3px 12px', display: 'inline-block', marginBottom: 10 }}>
               Pregunta {answered + 1}
             </span>
-            <h2 style={{ fontSize: 16, fontWeight: 800, color: '#fff', lineHeight: 1.45 }}>{question?.enunciado}</h2>
+            <h2 style={{ fontSize: 16, fontWeight: 800, color: '#fff', lineHeight: 1.45, textAlign: 'justify' }}>{question?.enunciado}</h2>
           </div>
 
           <div style={{ flex: 1, overflowY: 'auto', padding: '20px 22px', display: 'flex', flexDirection: 'column', gap: 11 }}>
@@ -431,7 +430,7 @@ export default function Estudiante({ user, onLogout }) {
                   <span style={{ width: 32, height: 32, borderRadius: 10, flexShrink: 0, background: lastAnswer ? 'rgba(255,255,255,0.25)' : (selectedOpt === oi ? 'rgba(255,255,255,0.25)' : col), color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 900 }}>
                     {lastAnswer && oi === lastAnswer.opcion_correcta ? '✓' : lastAnswer && oi === lastAnswer.opcion_elegida && !lastAnswer.es_correcta ? '✗' : OPT_LETTERS[oi]}
                   </span>
-                  <span style={{ fontSize: 14, fontWeight: 600, color: textColor, lineHeight: 1.35 }}>{opt}</span>
+                  <span style={{ fontSize: 14, fontWeight: 600, color: textColor, lineHeight: 1.35, textAlign: 'justify', flex: 1 }}>{opt}</span>
                 </button>
               );
             })}

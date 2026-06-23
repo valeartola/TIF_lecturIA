@@ -11,6 +11,7 @@ from backend.services.llm_client import LLMClient
 from backend.ia.contexto import construir_prompt_juez, construir_prompt_juez_lote
 from backend.ia.especificaciones_loader import specs_para_juez
 from backend.services.verificador_idioma import verificar_lote
+from backend.services.verificador_repeticion import verificar_lote as verificar_repeticion_lote
 
 logger = logging.getLogger(__name__)
 
@@ -95,13 +96,16 @@ class Juez:
         }
 
     def evaluar_lote(self, texto: str, preguntas: list[dict], dificultad: str,
-                     tipo: str, aspectos_previos: list = None) -> list[dict]:
+                     tipo: str, aspectos_previos: list = None,
+                     enunciados_previos: list = None) -> list[dict]:
         """
         Evalúa un lote de preguntas en una sola llamada al LLM.
 
-        Antes de llamar al LLM, pasa el lote por un verificador mecánico
-        (determinístico, sin tokens) que detecta problemas de idioma
-        mezclado. Las preguntas marcadas por ese verificador se rechazan
+        Antes de llamar al LLM, pasa el lote por verificaciones mecánicas
+        (determinísticas, sin tokens): candidatas sin respuesta correcta
+        válida (ver Generador._resolver_correcta), candidatas con idioma
+        mezclado, y candidatas demasiado similares en texto a preguntas ya
+        aprobadas (ver verificador_repeticion). Las que fallan se rechazan
         directamente sin gastar la llamada al juez; solo las preguntas
         limpias se evalúan con el LLM.
 
@@ -114,8 +118,11 @@ class Juez:
             preguntas: lista de dicts con pregunta, opciones, correcta.
             dificultad: FÁCIL, MEDIA o DIFÍCIL.
             tipo: tipo de pregunta pedido al generador.
-            aspectos_previos: aspectos ya cubiertos por preguntas aprobadas
-                anteriores al lote actual.
+            aspectos_previos: aspectos (resúmenes semánticos del juez) ya
+                cubiertos por preguntas aprobadas anteriores al lote actual.
+            enunciados_previos: lista de strings con el texto literal de
+                las preguntas ya aprobadas (de niveles/lotes anteriores),
+                usada por el verificador de repetición textual.
 
         Returns:
             Lista de dicts de evaluación, uno por pregunta, en el mismo orden.
@@ -123,17 +130,35 @@ class Juez:
         if not preguntas:
             return []
 
-        # Paso 1: verificación mecánica de idioma (sin tokens).
+        # Paso 1a: candidatas donde _resolver_correcta (en el Generador) no
+        # pudo encontrar la respuesta marcada entre las opciones. Se
+        # rechazan sin gastar la llamada al juez, igual que el verificador
+        # de idioma: es un problema de formato detectado mecánicamente,
+        # no algo que el juez deba evaluar con criterio pedagógico.
+        problemas_correcta = {
+            i: {"motivo": "el LLM no marcó una respuesta correcta válida entre las opciones"}
+            for i, p in enumerate(preguntas) if p.get("_sin_correcta_valida")
+        }
+
+        # Paso 1b: verificación mecánica de idioma (sin tokens).
         problemas_idioma = verificar_lote(preguntas)
 
-        if problemas_idioma:
-            indices_descartados = sorted(problemas_idioma.keys())
+        # Paso 1c: verificación mecánica de repetición textual (sin tokens).
+        # Complementa el control semántico de aspectos_cubiertos: dos
+        # preguntas pueden resumirse distinto y aun así estar redactadas
+        # de forma casi idéntica. Esto atrapa ese caso antes del juez.
+        problemas_repeticion = verificar_repeticion_lote(preguntas, enunciados_previos)
+
+        problemas_mecanicos = {**problemas_correcta, **problemas_idioma, **problemas_repeticion}
+
+        if problemas_mecanicos:
+            indices_descartados = sorted(problemas_mecanicos.keys())
             logger.info(
-                f"   [verificador-idioma] {len(indices_descartados)} pregunta(s) "
-                f"descartada(s) por idioma mezclado: índices {indices_descartados}"
+                f"   [verificación-mecánica] {len(indices_descartados)} pregunta(s) "
+                f"descartada(s) sin pasar por el juez: índices {indices_descartados}"
             )
 
-        indices_a_evaluar = [i for i in range(len(preguntas)) if i not in problemas_idioma]
+        indices_a_evaluar = [i for i in range(len(preguntas)) if i not in problemas_mecanicos]
         preguntas_a_evaluar = [preguntas[i] for i in indices_a_evaluar]
 
         evaluaciones_llm = []
@@ -173,7 +198,7 @@ class Juez:
         # Paso 2: reensamblar en el orden original, combinando los
         # rechazos mecánicos con las evaluaciones del LLM.
         resultado = [None] * len(preguntas)
-        for indice, problema in problemas_idioma.items():
+        for indice, problema in problemas_mecanicos.items():
             resultado[indice] = self._evaluacion_rechazo_mecanico(problema["motivo"])
         for indice_original, evaluacion in zip(indices_a_evaluar, evaluaciones_llm):
             resultado[indice_original] = evaluacion
