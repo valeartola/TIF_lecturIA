@@ -1,12 +1,10 @@
 import { useState, useEffect } from 'react';
 import { C } from '../constants/colors';
 import { listarTextosDisponibles, getTexto, proximaPregunta, registrarRespuesta, getEstadoIntentos } from '../api';
+import { nivelLabel, nivelColor } from '../utils/nivel';
 
 const OPT_COLORS = [C.blue, C.green, C.yellow, C.pink];
 const OPT_LETTERS = ['A', 'B', 'C', 'D'];
-
-const nivelLabel = (n) => ({ 'FÁCIL': 'Básico', 'MEDIA': 'Intermedio', 'DIFÍCIL': 'Avanzado' }[n] || n);
-const nivelColor = (n) => ({ 'FÁCIL': C.green, 'MEDIA': C.yellow, 'DIFÍCIL': C.red }[n] || C.gray);
 
 const FRASES_MOTIVACIONALES = [
   '¡Ya empezaste, no te rajes ahora! 💪',
