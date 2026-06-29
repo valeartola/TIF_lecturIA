@@ -19,14 +19,15 @@ El párrafo debe ser cálido, profesional y útil; como si lo escribiera un coor
 Datos actuales de la clase:
 - Total de alumnos: {total_alumnos}
 - Alumnos con actividad registrada: {len(activos)}
-- Alumnos sin actividad aún: {len(inactivos)}
+- Alumnos sin actividad aún: {len(inactivos)} → {nombres(inactivos)}
 - Promedio general de aciertos: {promedio_general}%
-- Alumnos con desempeño destacado (≥ 80 %): {len(destacados)} → {nombres(destacados)}
-- Alumnos que necesitan atención (< 50 % o sin actividad): {len(en_riesgo)} → {nombres(en_riesgo)}
+- Alumnos con desempeño destacado (≥ 80%): {len(destacados)} → {nombres(destacados)}
+- Alumnos con bajo rendimiento (< 50%): {len(en_riesgo)} → {nombres(en_riesgo)}
 - Actividades creadas: {total_actividades}
 
 Instrucciones de estilo:
 - Empezá con algo positivo antes de mencionar los desafíos.
 - Integrá los números en oraciones naturales; no uses listas ni títulos.
-- Si hay alumnos en riesgo, sugerí brevemente atención personalizada.
+- Si hay alumnos con bajo rendimiento, sugerí atención personalizada o acompañamiento.
+- Si hay alumnos sin actividad, sugerí motivarlos o recordarles que participen de las actividades, con un tono amable y de invitación (no de reproche).
 - Máximo 6 oraciones. Solo texto corrido, sin formato markdown."""

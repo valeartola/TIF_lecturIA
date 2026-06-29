@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from .pregunta import Pregunta
 
-PREGUNTAS_POR_NIVEL = 7  # siempre se generan 5 por dificultad
+PREGUNTAS_POR_NIVEL = 7
 DIFICULTADES = ["FÁCIL", "MEDIA", "DIFÍCIL"]
 
 @dataclass

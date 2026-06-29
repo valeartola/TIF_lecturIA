@@ -7,7 +7,6 @@ La lógica es la misma que en backend/ia/generador.py pero encapsulada en una cl
 
 import json
 import random
-import asyncio
 import logging
 import time
 from backend.services.llm_client import LLMClient
@@ -22,6 +21,7 @@ class Generador:
 
     MAX_INTENTOS_POR_PREGUNTA = 3
     MAX_REEMPLAZOS_TOTALES = 5
+    BATCH_JUEZ = 3
 
     def __init__(self, cliente: LLMClient):
         self._cliente = cliente
@@ -230,11 +230,17 @@ class Generador:
 
             # Evaluar todo el lote en una sola llamada al juez
             # Usamos el tipo del primer slot como referencia (todos del mismo nivel)
-            evaluaciones = juez.evaluar_lote(
-                texto, candidatas, dificultad, tipos_lote[0],
-                aspectos_previos=aspectos_cubiertos,
-                enunciados_previos=[p["pregunta"] for p in preguntas_aprobadas],
-            )
+            BATCH_JUEZ = self.BATCH_JUEZ
+            evaluaciones = []
+            for i in range(0, len(candidatas), BATCH_JUEZ):
+                sub_candidatas = candidatas[i:i + BATCH_JUEZ]
+                sub_tipos = tipos_lote[i:i + BATCH_JUEZ]
+                sub_evals = juez.evaluar_lote(
+                    texto, sub_candidatas, dificultad, sub_tipos[0],
+                    aspectos_previos=aspectos_cubiertos,
+                    enunciados_previos=[p["pregunta"] for p in preguntas_aprobadas],
+                )
+                evaluaciones.extend(sub_evals)
 
             slots_pendientes_siguiente = []
             for candidata, evaluacion, (orig_i, (tipo, pos)) in zip(

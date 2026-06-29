@@ -218,7 +218,6 @@ export default function ProgresoContent({ students, loadingStudents, resumen, lo
         <>
             {/* Tarjeta IA */}
             <div style={{ background: `linear-gradient(135deg, ${C.blue}, ${C.blueDark})`, borderRadius: card.radius, padding: '20px 24px', marginBottom: 24, display: 'flex', gap: 16, alignItems: 'flex-start' }}>
-                <div style={{ fontSize: 26, flexShrink: 0, marginTop: 2 }}>✨</div>
                 <div style={{ flex: 1 }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                         <div style={{ fontSize: 11.5, fontWeight: 800, color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase', letterSpacing: 0.5 }}>Análisis de tu clase · Generado con IA</div>
@@ -342,24 +341,25 @@ export default function ProgresoContent({ students, loadingStudents, resumen, lo
                             ? <div style={{ padding: '20px 0', textAlign: 'center', color: THEME.subtext }}>No se encontró ningún alumno con ese nombre.</div>
                             : (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                                    <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr auto', gap: 12, padding: '6px 14px', borderRadius: 8, background: 'rgba(0,0,0,0.04)', alignItems: 'center' }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr 80px 100px', gap: 12, padding: '6px 14px', borderRadius: 8, background: 'rgba(0,0,0,0.04)', alignItems: 'center' }}>
                                         <span style={{ fontSize: 11, fontWeight: 800, color: THEME.subtext, textTransform: 'uppercase', letterSpacing: 0.5 }}>Alumno</span>
                                         <div style={{ display: 'grid', gridTemplateColumns: `repeat(${progresoActs.length}, 1fr)`, gap: 6 }}>
                                             {progresoActs.map((act, i) => (
                                                 <span key={act.actividad_id} style={{ fontSize: 10, fontWeight: 800, color: THEME.subtext, textTransform: 'uppercase', letterSpacing: 0.4, textAlign: 'center', display: 'block' }} title={act.titulo}>Act. {i + 1}</span>
                                             ))}
                                         </div>
-                                        <button onClick={() => setOrdenDesc(o => !o)} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3, whiteSpace: 'nowrap' }}>
+                                        <button onClick={() => setOrdenDesc(o => !o)} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3, whiteSpace: 'nowrap', width: '100%' }}>
                                             <span style={{ fontSize: 11, fontWeight: 800, color: THEME.subtext, textTransform: 'uppercase', letterSpacing: 0.5 }}>Promedio</span>
                                             <span style={{ fontSize: 16, color: C.blue, fontWeight: 900 }}>{ordenDesc ? '↓' : '↑'}</span>
                                         </button>
+                                        <span></span>
                                     </div>
                                     {alumnosFiltrados.map((s) => {
                                         const sinAct = s.promedio === null;
                                         const promedioColor = sinAct ? THEME.subtext : s.promedio >= 70 ? C.green : s.promedio >= 50 ? C.yellow : C.red;
                                         const nivelCfg = { 'FÁCIL': { label: 'Básico', bg: '#FEECEC', color: C.red }, 'MEDIA': { label: 'Intermedio', bg: '#FFF8E1', color: C.yellow }, 'DIFÍCIL': { label: 'Avanzado', bg: '#E8F5EB', color: C.green } }[s.nivel] || null;
                                         return (
-                                            <div key={s.id} style={{ display: 'grid', gridTemplateColumns: '220px 1fr auto', gap: 12, padding: '14px', borderRadius: 14, alignItems: 'center', background: '#fff', boxShadow: '0 1px 6px rgba(0,0,0,0.06)', borderLeft: sinAct ? `4px solid ${C.red}55` : s.promedio < 50 ? `4px solid ${C.red}` : s.promedio < 70 ? `4px solid ${C.yellow}` : `4px solid ${C.green}` }}>
+                                            <div key={s.id} style={{ display: 'grid', gridTemplateColumns: '220px 1fr 80px 100px', gap: 12, padding: '14px', borderRadius: 14, alignItems: 'center', background: '#fff', boxShadow: '0 1px 6px rgba(0,0,0,0.06)', borderLeft: sinAct ? `4px solid ${C.red}55` : s.promedio < 50 ? `4px solid ${C.red}` : s.promedio < 70 ? `4px solid ${C.yellow}` : `4px solid ${C.green}` }}>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
                                                     <div style={{ width: 38, height: 38, borderRadius: '50%', background: sinAct ? C.red + '18' : C.blue + '18', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: 14, color: sinAct ? C.red : C.blue, flexShrink: 0 }}>
                                                         {s.nombre[0].toUpperCase()}
@@ -386,11 +386,11 @@ export default function ProgresoContent({ students, loadingStudents, resumen, lo
                                                         );
                                                     })}
                                                 </div>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-                                                    <div style={{ textAlign: 'center', minWidth: 48 }}>
-                                                        <div style={{ fontSize: 16, fontWeight: 900, color: promedioColor }}>{sinAct ? '—' : `${s.promedio}%`}</div>
-                                                        <div style={{ fontSize: 10, color: THEME.subtext, fontWeight: 600 }}>promedio</div>
-                                                    </div>
+                                                <div style={{ textAlign: 'center', minWidth: 48 }}>
+                                                    <div style={{ fontSize: 16, fontWeight: 900, color: promedioColor }}>{sinAct ? '—' : `${s.promedio}%`}</div>
+                                                    <div style={{ fontSize: 10, color: THEME.subtext, fontWeight: 600 }}>promedio</div>
+                                                </div>
+                                                <div style={{ display: 'flex', justifyContent: 'center' }}>
                                                     <button onClick={() => setAlumnoDetalle({ alumno: s, actividadIdx: 0 })}
                                                         style={{ background: C.blue, border: 'none', borderRadius: 10, padding: '8px 14px', fontSize: 12, fontWeight: 800, color: '#fff', cursor: 'pointer', fontFamily: 'Nunito', whiteSpace: 'nowrap' }}>
                                                         Ver detalle

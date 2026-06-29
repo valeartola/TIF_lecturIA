@@ -91,7 +91,7 @@ markdown:
   ...
 ]
 
-Recordá: aprobada=true solo si TODAS las cuatro dimensiones tienen puntaje ≥ 3.
+Recordá: aprobada=true solo si TODAS las cuatro dimensiones tienen puntaje ≥ 4.
 """
 
 
@@ -396,5 +396,5 @@ estructura exacta:
   "sugerencia_mejora": "Si aprobada=false, instrucción concreta para regenerar. Si aprobada=true, dejar string vacío."
 }}
 
-Recordá: aprobada=true solo si TODAS las cuatro dimensiones tienen puntaje ≥ 3.
+Recordá: aprobada=true solo si TODAS las cuatro dimensiones tienen puntaje ≥ 4.
 """

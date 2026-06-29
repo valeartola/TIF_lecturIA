@@ -31,6 +31,7 @@ export default function Estudiante({ user, onLogout }) {
   const [error, setError] = useState('');
   const [fraseBloqueada, setFraseBloqueada] = useState('');
   const [etiquetasTextos, setEtiquetasTextos] = useState({});
+  const [modalPerfil, setModalPerfil] = useState(false);
 
   // 1. Cargar textos disponibles + etiquetas (reutilizable)
   const cargarInicio = async () => {
@@ -219,8 +220,21 @@ export default function Estudiante({ user, onLogout }) {
           <span style={{ fontWeight: 900, fontSize: 18, color: C.green }}>Lectur<span style={{ color: C.yellow }}>IA</span></span>
           <div style={{ flex: 1 }} />
           <span style={{ fontSize: 13, fontWeight: 700, color: '#888' }}>Hola, {user?.nombre || 'Estudiante'}</span>
-          <div onClick={onLogout} title="Cerrar sesión" style={{ width: 36, height: 36, borderRadius: '50%', background: C.pink, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: 14, color: '#fff', cursor: 'pointer' }}>
-            {user?.nombre?.[0]?.toUpperCase() || 'A'}
+          <div style={{ position: 'relative' }}>
+            <div onClick={() => setModalPerfil(v => !v)} title="Opciones" style={{ width: 36, height: 36, borderRadius: '50%', background: C.pink, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: 14, color: '#fff', cursor: 'pointer' }}>
+              {user?.nombre?.[0]?.toUpperCase() || 'A'}
+            </div>
+            {modalPerfil && (
+              <>
+                <div onClick={() => setModalPerfil(false)} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
+                <div style={{ position: 'absolute', top: 44, right: 0, background: '#fff', borderRadius: 12, boxShadow: '0 8px 24px rgba(0,0,0,0.15)', padding: '6px', zIndex: 50, minWidth: 160 }}>
+                  <button onClick={() => { setModalPerfil(false); onLogout(); }}
+                    style={{ width: '100%', background: 'none', border: 'none', borderRadius: 8, padding: '9px 12px', fontSize: 13, fontWeight: 800, color: C.green, cursor: 'pointer', fontFamily: 'Nunito', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    Cerrar sesión
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
 
@@ -375,8 +389,22 @@ export default function Estudiante({ user, onLogout }) {
           <span style={{ fontSize: 13, fontWeight: 800, color: C.dark }}>{correct}/{answered}</span>
           <span style={{ fontSize: 12, color: '#888', fontWeight: 600 }}>correctas</span>
         </div>
-        <div onClick={onLogout} title="Cerrar sesión" style={{ width: 36, height: 36, borderRadius: '50%', background: C.pink, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: 14, color: '#fff', cursor: 'pointer' }}>
-          {user?.nombre?.[0]?.toUpperCase() || 'A'}
+        <div style={{ position: 'relative' }}>
+          <div onClick={() => setModalPerfil(v => !v)} title="Opciones" style={{ width: 36, height: 36, borderRadius: '50%', background: C.pink, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: 14, color: '#fff', cursor: 'pointer' }}>
+            {user?.nombre?.[0]?.toUpperCase() || 'A'}
+          </div>
+          {modalPerfil && (
+            <>
+              <div onClick={() => setModalPerfil(false)} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
+              <div style={{ position: 'absolute', top: 44, right: 0, background: '#fff', borderRadius: 12, boxShadow: '0 8px 24px rgba(0,0,0,0.15)', padding: '6px', zIndex: 50, minWidth: 160 }}>
+                <div style={{ padding: '8px 12px 6px', fontSize: 12, fontWeight: 700, color: '#aaa' }}>{user?.nombre || 'Alumno'}</div>
+                <button onClick={() => { setModalPerfil(false); onLogout(); }}
+                  style={{ width: '100%', background: 'none', border: 'none', borderRadius: 8, padding: '9px 12px', fontSize: 13, fontWeight: 800, color: C.red, cursor: 'pointer', fontFamily: 'Nunito', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  🚪 Cerrar sesión
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </div>
 

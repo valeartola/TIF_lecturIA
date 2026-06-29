@@ -11,7 +11,7 @@ import re
 import time
 from abc import ABC, abstractmethod
 
-from groq import Groq, RateLimitError as GroqRateLimitError, APIConnectionError as GroqConnectionError
+from groq import Groq, RateLimitError as GroqRateLimitError, APIConnectionError as GroqConnectionError, BadRequestError as GroqBadRequestError
 from openai import OpenAI, RateLimitError as OpenAIRateLimitError, APIConnectionError as OpenAIConnectionError, InternalServerError as OpenAIInternalServerError
 from google import genai
 from google.genai import types
@@ -62,6 +62,11 @@ class GroqClient(LLMClient):
                     raise
                 logger.warning(f"   [groq] rate limit, esperando {espera:.0f}s (intento {intento + 1}/3)...")
                 time.sleep(espera + 1)
+            except GroqBadRequestError:
+                if intento == 2:
+                    raise
+                logger.warning(f"   [groq] bad request (JSON inválido), reintentando en {self.ESPERA_CONEXION_S}s (intento {intento + 1}/3)...")
+                time.sleep(self.ESPERA_CONEXION_S)
             except GroqConnectionError:
                 if intento == 2:
                     raise
@@ -71,9 +76,9 @@ class GroqClient(LLMClient):
 
 
 class UMCloudClient(LLMClient):
-    """Cliente para UM-Cloud (gpt-oss-20b). Usado por el Juez."""
+    """Cliente para UM-Cloud (gemma4-26b). Usado por el Juez."""
 
-    MODELO = "gpt-oss-20b"
+    MODELO = "gemma4-26b"
     PAUSA_ENTRE_LLAMADAS_S = 2.0
 
     def __init__(self, api_key: str):
@@ -90,7 +95,7 @@ class UMCloudClient(LLMClient):
                     model=self.MODELO,
                     messages=[{"role": "user", "content": prompt}],
                     temperature=temperatura,
-                    response_format={"type": "json_object"},  # agregar esta línea
+                    response_format={"type": "json_object"},
                 )
                 return respuesta.choices[0].message.content
             except OpenAIRateLimitError as e:
@@ -111,11 +116,29 @@ class UMCloudClient(LLMClient):
                 time.sleep(self.ESPERA_CONEXION_S)
         raise RuntimeError("UMCloudClient: no se pudo conectar tras varios reintentos")
 
+    def llamar_texto(self, prompt: str, temperatura: float = 0.7) -> str:
+        """Igual que llamar() pero para texto libre, sin esperar JSON."""
+        time.sleep(self.PAUSA_ENTRE_LLAMADAS_S)
+        for intento in range(3):
+            try:
+                respuesta = self._client.chat.completions.create(
+                    model=self.MODELO,
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=temperatura,
+                )
+                return respuesta.choices[0].message.content.strip()
+            except (OpenAIConnectionError, OpenAIInternalServerError):
+                if intento == 2:
+                    raise
+                logger.warning(f"   [um-cloud] error, reintentando en {self.ESPERA_CONEXION_S}s ({intento + 1}/3)...")
+                time.sleep(self.ESPERA_CONEXION_S)
+        raise RuntimeError("UMCloudClient: no se pudo conectar tras varios reintentos")
+
 
 class GeminiClient(LLMClient):
     """Cliente para Gemini (gemini-2.0-flash). Usado por el Juez."""
 
-    MODELO = "gemini-2.5-flash-lite"
+    MODELO = "gemini-2.5-flash"
     PAUSA_ENTRE_LLAMADAS_S = 1.0
 
     def __init__(self, api_key: str):

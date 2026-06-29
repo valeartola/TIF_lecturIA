@@ -19,8 +19,7 @@ def _crear_generador_y_juez():
     groq_client = GroqClient(api_key=settings.groq_api_key)
     gemini_client = GeminiClient(api_key=settings.gemini_api_key)
     return Generador(cliente=groq_client), Juez(cliente=gemini_client)
-
-@router.post("/generar")
+@router.post("/generar")    
 def generar(
     texto_id: int,
     session: Session = Depends(get_session),

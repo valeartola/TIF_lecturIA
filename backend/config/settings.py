@@ -6,7 +6,7 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./lecturia.db"
     groq_api_key: str
     gemini_api_key: str
-    um_cloud_api_key: str = ""  # opcional: el juez de la UM fue reemplazado por Gemini
+    um_cloud_api_key: str             # usada por el resumen IA (UMCloudClient)
     secret_key: str             # clave para firmar los JWT (obligatoria, viene del entorno)
     log_level: str = "INFO"
     max_reintentos_por_slot: int = 3

@@ -50,6 +50,32 @@ class Juez:
         dims = ["contenido_texto", "respuesta_correcta_unica", "nivel_adecuado", "no_repeticion"]
         return all(eval_dict[d] >= 4 for d in dims)
 
+    def _extraer_lista_evaluaciones(self, contenido: str, n_esperado: int) -> list:
+        """
+        Extrae el array de evaluaciones del JSON devuelto por el LLM.
+
+        UM-Cloud puede devolver:
+          - Un array directo: [...]
+          - Un objeto con el array en alguna clave: {"preguntas": [...]}
+          - Un solo objeto (cuando n_esperado=1): {...}
+        """
+        data = json.loads(contenido)
+
+        if isinstance(data, list):
+            return data
+
+        if isinstance(data, dict):
+            # Buscar el primer valor que sea una lista
+            for valor in data.values():
+                if isinstance(valor, list):
+                    return valor
+            # Si no hay lista, puede ser un objeto único (lote de 1 pregunta)
+            if n_esperado == 1:
+                return [data]
+            raise ValueError("El juez no devolvió un array JSON")
+
+        raise ValueError(f"Formato inesperado: {type(data).__name__}")
+
     def evaluar(self, texto: str, pregunta: dict, dificultad: str,
                 tipo: str, aspectos_previos: list = None) -> dict:
         """
@@ -100,55 +126,16 @@ class Juez:
                      enunciados_previos: list = None) -> list[dict]:
         """
         Evalúa un lote de preguntas en una sola llamada al LLM.
-
-        Antes de llamar al LLM, pasa el lote por verificaciones mecánicas
-        (determinísticas, sin tokens): candidatas sin respuesta correcta
-        válida (ver Generador._resolver_correcta), candidatas con idioma
-        mezclado, y candidatas demasiado similares en texto a preguntas ya
-        aprobadas (ver verificador_repeticion). Las que fallan se rechazan
-        directamente sin gastar la llamada al juez; solo las preguntas
-        limpias se evalúan con el LLM.
-
-        Reduce drásticamente el consumo de tokens: las specs y el texto se
-        envían una sola vez para todas las preguntas del lote, en lugar de
-        repetirlos en cada llamada individual.
-
-        Args:
-            texto: el texto fuente.
-            preguntas: lista de dicts con pregunta, opciones, correcta.
-            dificultad: FÁCIL, MEDIA o DIFÍCIL.
-            tipo: tipo de pregunta pedido al generador.
-            aspectos_previos: aspectos (resúmenes semánticos del juez) ya
-                cubiertos por preguntas aprobadas anteriores al lote actual.
-            enunciados_previos: lista de strings con el texto literal de
-                las preguntas ya aprobadas (de niveles/lotes anteriores),
-                usada por el verificador de repetición textual.
-
-        Returns:
-            Lista de dicts de evaluación, uno por pregunta, en el mismo orden.
         """
         if not preguntas:
             return []
 
-        # Paso 1a: candidatas donde _resolver_correcta (en el Generador) no
-        # pudo encontrar la respuesta marcada entre las opciones. Se
-        # rechazan sin gastar la llamada al juez, igual que el verificador
-        # de idioma: es un problema de formato detectado mecánicamente,
-        # no algo que el juez deba evaluar con criterio pedagógico.
         problemas_correcta = {
             i: {"motivo": "el LLM no marcó una respuesta correcta válida entre las opciones"}
             for i, p in enumerate(preguntas) if p.get("_sin_correcta_valida")
         }
-
-        # Paso 1b: verificación mecánica de idioma (sin tokens).
         problemas_idioma = verificar_lote(preguntas)
-
-        # Paso 1c: verificación mecánica de repetición textual (sin tokens).
-        # Complementa el control semántico de aspectos_cubiertos: dos
-        # preguntas pueden resumirse distinto y aun así estar redactadas
-        # de forma casi idéntica. Esto atrapa ese caso antes del juez.
         problemas_repeticion = verificar_repeticion_lote(preguntas, enunciados_previos)
-
         problemas_mecanicos = {**problemas_correcta, **problemas_idioma, **problemas_repeticion}
 
         if problemas_mecanicos:
@@ -173,9 +160,7 @@ class Juez:
             contenido = self._cliente.llamar(prompt)
 
             try:
-                evaluaciones_llm = json.loads(contenido)
-                if not isinstance(evaluaciones_llm, list):
-                    raise ValueError("El juez no devolvió un array JSON")
+                evaluaciones_llm = self._extraer_lista_evaluaciones(contenido, len(preguntas_a_evaluar))
                 if len(evaluaciones_llm) != len(preguntas_a_evaluar):
                     raise ValueError(
                         f"El juez devolvió {len(evaluaciones_llm)} evaluaciones "
@@ -186,17 +171,18 @@ class Juez:
             except (json.JSONDecodeError, ValueError) as e:
                 logger.warning(f"   [juez-lote] formato inválido ({e}), reintentando...")
                 contenido = self._cliente.llamar(prompt)
-                evaluaciones_llm = json.loads(contenido)
-                if not isinstance(evaluaciones_llm, list):
-                    raise ValueError("El juez no devolvió un array JSON en el reintento")
+                evaluaciones_llm = self._extraer_lista_evaluaciones(contenido, len(preguntas_a_evaluar))
+                if len(evaluaciones_llm) != len(preguntas_a_evaluar):
+                    raise ValueError(
+                        f"El juez devolvió {len(evaluaciones_llm)} evaluaciones "
+                        f"pero se enviaron {len(preguntas_a_evaluar)} preguntas (reintento)"
+                    )
                 for ev in evaluaciones_llm:
                     self._validar_evaluacion(ev)
 
             for ev in evaluaciones_llm:
                 ev["aprobada"] = self._calcular_aprobada(ev)
 
-        # Paso 2: reensamblar en el orden original, combinando los
-        # rechazos mecánicos con las evaluaciones del LLM.
         resultado = [None] * len(preguntas)
         for indice, problema in problemas_mecanicos.items():
             resultado[indice] = self._evaluacion_rechazo_mecanico(problema["motivo"])

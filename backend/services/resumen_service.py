@@ -1,14 +1,14 @@
 """
-Genera un resumen pedagógico de la clase con Gemini.
+Genera un resumen pedagógico de la clase con UM-Cloud.
 
 Reúne las métricas reales de la BD (alumnos, respuestas, actividades),
-construye un prompt y llama a GeminiClient.llamar_texto().
+construye un prompt y llama a UMCloudClient.llamar_texto().
 """
 from sqlmodel import Session, select
 
 from backend.models import Actividad, Respuesta, Texto, Usuario
 from backend.config.settings import get_settings
-from backend.services.llm_client import GeminiClient
+from backend.services.llm_client import UMCloudClient
 from backend.ia.contexto_resumen import construir_prompt_resumen
 
 
@@ -58,18 +58,14 @@ def generar_resumen_clase(docente_id: int, nombre_docente: str, session: Session
                 "activo": True,
             })
 
-    activos   = [s for s in stats if s["activo"]]
-    inactivos = [s for s in stats if not s["activo"]]
+    activos    = [s for s in stats if s["activo"]]
+    inactivos  = [s for s in stats if not s["activo"]]
     destacados = [s for s in activos if s["pct"] >= 80]
-    en_riesgo  = [s for s in activos if s["pct"] < 50] + inactivos
+    en_riesgo  = [s for s in activos if s["pct"] < 50]
 
     promedio_general = (
         round(sum(s["pct"] for s in activos) / len(activos), 1) if activos else 0.0
     )
-
-    def nombres(lista, max_n=3):
-        ns = [s["nombre"] for s in lista[:max_n]]
-        return ", ".join(ns) if ns else "ninguno"
 
     prompt = construir_prompt_resumen(
         nombre_docente=nombre_docente,
@@ -82,5 +78,5 @@ def generar_resumen_clase(docente_id: int, nombre_docente: str, session: Session
         total_actividades=total_actividades,
     )
 
-    client = GeminiClient(api_key=get_settings().gemini_api_key)
+    client = UMCloudClient(api_key=get_settings().um_cloud_api_key)
     return client.llamar_texto(prompt)

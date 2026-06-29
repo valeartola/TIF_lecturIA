@@ -28,6 +28,7 @@ export default function CreateModal({ onClose, onPublish, onEliminar, actividadE
     const [loadingExistente, setLoadingExistente] = useState(esRetomar);
     const [generandoMas, setGenerandoMas] = useState(false);
     const inputRef = useRef(null);
+    const [generating, setGenerating] = useState(false);
 
     useEffect(() => {
         if (!esRetomar) return;
@@ -85,6 +86,8 @@ export default function CreateModal({ onClose, onPublish, onEliminar, actividadE
     };
 
     const startGenerate = async () => {
+        if (generating) return;
+        setGenerating(true);
         setApiError('');
         setStep(3);
         try {
@@ -100,6 +103,7 @@ export default function CreateModal({ onClose, onPublish, onEliminar, actividadE
         } catch (err) {
             setApiError(err.message || 'Error al generar la actividad');
             setStep(2);
+            setGenerating(false);
         }
     };
 
@@ -126,7 +130,7 @@ export default function CreateModal({ onClose, onPublish, onEliminar, actividadE
                 <div style={{ background: C.blue, padding: '20px 26px', display: 'flex', alignItems: 'center', gap: 14, flexShrink: 0 }}>
                     <div style={{ width: 42, height: 42, borderRadius: 12, background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>{esRetomar ? '📝' : '✨'}</div>
                     <div style={{ flex: 1 }}>
-                        <h2 style={{ fontSize: 18, fontWeight: 900, color: '#fff' }}>{esRetomar ? 'Retomar actividad' : 'Crear actividad con IA'}</h2>
+                        <h2 style={{ fontSize: 18, fontWeight: 900, color: '#fff' }}>{esRetomar ? 'Retomar actividad' : 'Crear actividad'}</h2>
                         <p style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.8)', fontWeight: 600 }}>
                             {esRetomar && (loadingExistente ? 'Cargando preguntas…' : `${title}`)}
                             {!esRetomar && step === 1 && 'Paso 1 de 3 — Subí el texto'}
@@ -352,17 +356,15 @@ export default function CreateModal({ onClose, onPublish, onEliminar, actividadE
                 {/* Footer */}
                 {step !== 3 && (
                     <div style={{ padding: '16px 26px', borderTop: '1px solid rgba(0,0,0,0.08)', display: 'flex', gap: 12, justifyContent: 'flex-end', flexShrink: 0 }}>
-                        {step === 1 && <button onClick={onClose} style={btnSecondary}>Cancelar</button>}
                         {step === 2 && (
                             <>
                                 <button onClick={() => setStep(1)} style={btnSecondary}>← Atrás</button>
-                                <button onClick={startGenerate} disabled={!title.trim() || !file} style={{ ...btnPrimary, background: title.trim() && file ? C.blue : '#ccc', cursor: title.trim() && file ? 'pointer' : 'default' }}>✨ Generar preguntas</button>
+                                <button onClick={startGenerate} disabled={generating || !title.trim() || !file} style={{ ...btnPrimary, background: title.trim() && file ? C.blue : '#ccc', cursor: title.trim() && file ? 'pointer' : 'default' }}>✨ Generar preguntas</button>
                             </>
                         )}
                         {step === 4 && (
                             <>
                                 {esRetomar && <button onClick={() => onEliminar(actividadId)} style={{ ...btnSecondary, color: '#ff4d4f', borderColor: '#ff4d4f44' }}>🗑 Eliminar actividad</button>}
-                                {esDesdeTexto && <button onClick={onClose} style={btnSecondary}>Cerrar</button>}
                                 {!esRetomar && !esDesdeTexto && <button onClick={() => setStep(2)} style={btnSecondary}>← Atrás</button>}
                                 {actividadId && (
                                     <button onClick={handlePublish} disabled={questions.filter(q => q.aprobada).length < 6}
