@@ -3,9 +3,9 @@ import { C } from '../../../constants/colors';
 import { editarNombreDocente } from '../../../api';
 
 const NAV = [
-    { id: 'clase', label: 'Mi Clase', icon: '👨‍🏫' },
-    { id: 'actividades', label: 'Actividades', icon: '📖' },
-    { id: 'progreso', label: 'Progreso', icon: '📊' },
+    { id: 'clase', label: 'Mi Clase' },
+    { id: 'actividades', label: 'Actividades' },
+    { id: 'progreso', label: 'Progreso' },
 ];
 
 const t = {
