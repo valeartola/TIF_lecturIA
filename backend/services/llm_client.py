@@ -138,7 +138,7 @@ class UMCloudClient(LLMClient):
 class GeminiClient(LLMClient):
     """Cliente para Gemini (gemini-2.0-flash). Usado por el Juez."""
 
-    MODELO = "gemini-2.5-flash"
+    MODELO = "gemini-3-flash"
     PAUSA_ENTRE_LLAMADAS_S = 1.0
 
     def __init__(self, api_key: str):

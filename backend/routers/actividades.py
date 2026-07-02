@@ -266,6 +266,62 @@ def editar_pregunta(
     }
 
 
+@router.post("/{actividad_id}/preguntas/manual")
+def crear_pregunta_manual(
+    actividad_id: int,
+    body: dict,
+    session: Session = Depends(get_session),
+    docente: Usuario = Depends(solo_docente)
+):
+    """Permite al docente agregar una pregunta manualmente a una actividad."""
+    actividad = session.get(Actividad, actividad_id)
+    if not actividad:
+        raise HTTPException(status_code=404, detail="Actividad no encontrada")
+
+    texto = session.get(Texto, actividad.texto_id)
+    if not texto or texto.docente_id != docente.id:
+        raise HTTPException(status_code=403, detail="No tenés permiso para modificar esta actividad")
+
+    # Validar campos requeridos
+    for campo in ["enunciado", "opciones", "opcion_correcta", "dificultad"]:
+        if campo not in body:
+            raise HTTPException(status_code=400, detail=f"Falta el campo '{campo}'")
+
+    if not isinstance(body["opciones"], list) or len(body["opciones"]) != 4:
+        raise HTTPException(status_code=400, detail="Deben enviarse exactamente 4 opciones")
+    if any(not op.strip() for op in body["opciones"]):
+        raise HTTPException(status_code=400, detail="Ninguna opción puede estar vacía")
+    if body["opcion_correcta"] not in [0, 1, 2, 3]:
+        raise HTTPException(status_code=400, detail="opcion_correcta debe ser 0, 1, 2 o 3")
+    if body["dificultad"] not in ["FÁCIL", "MEDIA", "DIFÍCIL"]:
+        raise HTTPException(status_code=400, detail="dificultad debe ser FÁCIL, MEDIA o DIFÍCIL")
+
+    tipo = body.get("tipo", "pregunta manual").strip()
+
+    pregunta = Pregunta(
+        actividad_id=actividad_id,
+        dificultad=body["dificultad"],
+        enunciado=body["enunciado"].strip(),
+        opciones_json=json.dumps(body["opciones"], ensure_ascii=False),
+        opcion_correcta=body["opcion_correcta"],
+        tipo=tipo,
+        validada=False,
+    )
+    session.add(pregunta)
+    session.commit()
+    session.refresh(pregunta)
+
+    return {
+        "id": pregunta.id,
+        "pregunta": pregunta.enunciado,
+        "opciones": json.loads(pregunta.opciones_json),
+        "correcta": pregunta.opcion_correcta,
+        "tipo": pregunta.tipo,
+        "dificultad": pregunta.dificultad,
+        "validada": pregunta.validada,
+    }
+
+
 @router.patch("/preguntas/{pregunta_id}/validar")
 def validar_pregunta(
     pregunta_id: int,
@@ -406,4 +462,3 @@ def proxima_pregunta(
             "opciones": json.loads(pregunta.opciones_json),
         }
     }
- 

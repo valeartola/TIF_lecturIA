@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { C } from '../../../constants/colors';
 import {
     subirTexto, generarActividad, validarPregunta, publicarActividad,
-    getActividad, editarPregunta, generarMasPreguntas,
+    getActividad, editarPregunta, generarMasPreguntas, crearPreguntaManual,
 } from '../../../api';
 
 const THEME = { subtext: '#666', heading: C.dark };
@@ -27,8 +27,10 @@ export default function CreateModal({ onClose, onPublish, onEliminar, actividadE
     const [apiError, setApiError] = useState('');
     const [loadingExistente, setLoadingExistente] = useState(esRetomar);
     const [generandoMas, setGenerandoMas] = useState(false);
+    const [showManualForm, setShowManualForm] = useState(false);
+    const [savingManual, setSavingManual] = useState(false);
+    const [manualForm, setManualForm] = useState({ enunciado: '', opciones: ['', '', '', ''], opcion_correcta: 0, tipo: 'comprensión literal', dificultad: 'FÁCIL' });
     const inputRef = useRef(null);
-    const [generating, setGenerating] = useState(false);
 
     useEffect(() => {
         if (!esRetomar) return;
@@ -77,6 +79,27 @@ export default function CreateModal({ onClose, onPublish, onEliminar, actividadE
         }
     };
 
+    const handleCrearManual = async () => {
+        setApiError('');
+        setSavingManual(true);
+        try {
+            const nueva = await crearPreguntaManual(actividadId, {
+                enunciado: manualForm.enunciado,
+                opciones: manualForm.opciones,
+                opcion_correcta: manualForm.opcion_correcta,
+                tipo: manualForm.tipo,
+                dificultad: manualForm.dificultad,
+            });
+            setQuestions(prev => [...prev, { ...nueva, nivel: nueva.dificultad, aprobada: false }]);
+            setManualForm({ enunciado: '', opciones: ['', '', '', ''], opcion_correcta: 0, tipo: 'comprensión literal', dificultad: 'FÁCIL' });
+            setShowManualForm(false);
+        } catch (err) {
+            setApiError(err.message || 'No se pudo crear la pregunta');
+        } finally {
+            setSavingManual(false);
+        }
+    };
+
     const pickFile = (f) => {
         if (!f) return;
         setFile(f);
@@ -86,8 +109,6 @@ export default function CreateModal({ onClose, onPublish, onEliminar, actividadE
     };
 
     const startGenerate = async () => {
-        if (generating) return;
-        setGenerating(true);
         setApiError('');
         setStep(3);
         try {
@@ -103,7 +124,6 @@ export default function CreateModal({ onClose, onPublish, onEliminar, actividadE
         } catch (err) {
             setApiError(err.message || 'Error al generar la actividad');
             setStep(2);
-            setGenerating(false);
         }
     };
 
@@ -347,6 +367,69 @@ export default function CreateModal({ onClose, onPublish, onEliminar, actividadE
                                             {generandoMas ? '✨ Generando…' : '✨ Generar más preguntas'}
                                         </button>
                                     )}
+
+                                    {/* Botón para agregar pregunta manual */}
+                                    {actividadId && !showManualForm && (
+                                        <button onClick={() => setShowManualForm(true)}
+                                            style={{ alignSelf: 'flex-start', padding: '10px 18px', borderRadius: 12, border: `2px dashed ${C.green}55`, background: C.green + '10', fontSize: 13, fontWeight: 800, color: C.green, cursor: 'pointer', fontFamily: 'Nunito' }}>
+                                            ＋ Agregar pregunta manualmente
+                                        </button>
+                                    )}
+
+                                    {/* Formulario de pregunta manual */}
+                                    {showManualForm && (
+                                        <div style={{ border: `2px solid ${C.green}44`, borderRadius: 14, padding: 18, background: C.green + '06', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                                            <span style={{ fontSize: 14, fontWeight: 800, color: C.dark }}>Nueva pregunta</span>
+
+                                            <textarea value={manualForm.enunciado} onChange={e => setManualForm(f => ({ ...f, enunciado: e.target.value }))} rows={2}
+                                                placeholder="Escribí el enunciado de la pregunta..."
+                                                style={{ border: '1.5px solid rgba(0,0,0,0.12)', borderRadius: 10, padding: '10px 12px', fontSize: 13.5, fontFamily: 'Nunito', fontWeight: 600, color: C.dark, resize: 'vertical', outline: 'none' }} />
+
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                                {manualForm.opciones.map((opt, oi) => (
+                                                    <div key={oi} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                        <button onClick={() => setManualForm(f => ({ ...f, opcion_correcta: oi }))}
+                                                            style={{ width: 22, height: 22, borderRadius: '50%', border: `2.5px solid ${manualForm.opcion_correcta === oi ? C.green : 'rgba(0,0,0,0.15)'}`, background: manualForm.opcion_correcta === oi ? C.green : '#fff', flexShrink: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                            {manualForm.opcion_correcta === oi && <span style={{ fontSize: 12, color: '#fff', fontWeight: 900 }}>✓</span>}
+                                                        </button>
+                                                        <input value={opt} onChange={e => setManualForm(f => { const ops = [...f.opciones]; ops[oi] = e.target.value; return { ...f, opciones: ops }; })}
+                                                            placeholder={`Opción ${oi + 1}`}
+                                                            style={{ flex: 1, border: `1.5px solid ${manualForm.opcion_correcta === oi ? C.green + '66' : 'rgba(0,0,0,0.1)'}`, borderRadius: 8, padding: '7px 10px', fontSize: 13, fontFamily: 'Nunito', fontWeight: 600, color: C.dark, outline: 'none', background: manualForm.opcion_correcta === oi ? C.green + '08' : '#fff' }} />
+                                                    </div>
+                                                ))}
+                                            </div>
+
+                                            <div style={{ display: 'flex', gap: 10 }}>
+                                                <select value={manualForm.tipo} onChange={e => setManualForm(f => ({ ...f, tipo: e.target.value }))}
+                                                    style={{ flex: 1, border: '1.5px solid rgba(0,0,0,0.1)', borderRadius: 8, padding: '7px 10px', fontSize: 12.5, fontFamily: 'Nunito', fontWeight: 700, color: C.dark, outline: 'none' }}>
+                                                    <option value="comprensión literal">Comprensión literal</option>
+                                                    <option value="comprensión inferencial">Comprensión inferencial</option>
+                                                    <option value="vocabulario en contexto">Vocabulario en contexto</option>
+                                                    <option value="idea principal o global">Idea principal</option>
+                                                    <option value="detalle específico">Detalle específico</option>
+                                                    <option value="causa y efecto">Causa y efecto</option>
+                                                </select>
+                                                <select value={manualForm.dificultad} onChange={e => setManualForm(f => ({ ...f, dificultad: e.target.value }))}
+                                                    style={{ flex: 1, border: '1.5px solid rgba(0,0,0,0.1)', borderRadius: 8, padding: '7px 10px', fontSize: 12.5, fontFamily: 'Nunito', fontWeight: 700, color: C.dark, outline: 'none' }}>
+                                                    <option value="FÁCIL">Fácil</option>
+                                                    <option value="MEDIA">Media</option>
+                                                    <option value="DIFÍCIL">Difícil</option>
+                                                </select>
+                                            </div>
+
+                                            <div style={{ display: 'flex', gap: 8 }}>
+                                                <button onClick={() => { setShowManualForm(false); setManualForm({ enunciado: '', opciones: ['', '', '', ''], opcion_correcta: 0, tipo: 'comprensión literal', dificultad: 'FÁCIL' }); }}
+                                                    style={{ padding: '8px 16px', borderRadius: 10, border: '1.5px solid rgba(0,0,0,0.1)', background: '#fff', fontSize: 12.5, fontWeight: 800, color: '#888', cursor: 'pointer', fontFamily: 'Nunito' }}>
+                                                    Cancelar
+                                                </button>
+                                                <button onClick={handleCrearManual}
+                                                    disabled={savingManual || !manualForm.enunciado.trim() || manualForm.opciones.some(o => !o.trim())}
+                                                    style={{ padding: '8px 18px', borderRadius: 10, border: 'none', background: (!manualForm.enunciado.trim() || manualForm.opciones.some(o => !o.trim())) ? '#ccc' : C.green, fontSize: 12.5, fontWeight: 800, color: '#fff', cursor: (!manualForm.enunciado.trim() || manualForm.opciones.some(o => !o.trim())) ? 'default' : 'pointer', fontFamily: 'Nunito' }}>
+                                                    {savingManual ? 'Guardando…' : '✓ Agregar pregunta'}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>
@@ -359,7 +442,7 @@ export default function CreateModal({ onClose, onPublish, onEliminar, actividadE
                         {step === 2 && (
                             <>
                                 <button onClick={() => setStep(1)} style={btnSecondary}>← Atrás</button>
-                                <button onClick={startGenerate} disabled={generating || !title.trim() || !file} style={{ ...btnPrimary, background: title.trim() && file ? C.blue : '#ccc', cursor: title.trim() && file ? 'pointer' : 'default' }}>✨ Generar preguntas</button>
+                                <button onClick={startGenerate} disabled={!title.trim() || !file} style={{ ...btnPrimary, background: title.trim() && file ? C.blue : '#ccc', cursor: title.trim() && file ? 'pointer' : 'default' }}>✨ Generar preguntas</button>
                             </>
                         )}
                         {step === 4 && (

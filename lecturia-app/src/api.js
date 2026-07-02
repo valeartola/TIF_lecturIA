@@ -141,6 +141,14 @@ export const getEstadoIntentos = (actividadId) =>
 export const getActividad = (actividadId) =>
     apiFetch(`/actividades/${actividadId}`);
 
+/** Crea una pregunta manual en una actividad (docente) */
+export const crearPreguntaManual = (actividadId, body) =>
+    apiFetch(`/actividades/${actividadId}/preguntas/manual`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+    });
+
 // ── Respuestas ───────────────────────────────────────────────
 
 /** Registra la respuesta del alumno a una pregunta */
